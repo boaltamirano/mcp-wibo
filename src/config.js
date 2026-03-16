@@ -4,7 +4,6 @@ export const API_BASE_URL = process.env.WIBO_API_URL || "https://wibo-api-report
 export const API_KEY = process.env.WIBO_API_KEY;
 export const MONGODB_URL = process.env.MONGODB_URL;
 export const MONGODB_DATABASE = process.env.MONGODB_DATABASE || "staging";
-export const ADMIN_KEY = process.env.ADMIN_KEY || "";
 
 // ─── Límites de seguridad ────────────────────────────────────
 export const QUERY_TIMEOUT_MS = 30_000;

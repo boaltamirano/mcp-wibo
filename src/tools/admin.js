@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { getDb } from "../db.js";
-import { requireAdmin } from "../auth.js";
 import { cached } from "../cache.js";
 import { ok } from "../api.js";
 import {
@@ -12,13 +11,9 @@ export function register(server) {
   // ── list_collections ──────────────────────────────────────
   server.tool(
     "list_collections",
-    "Lista todas las colecciones disponibles en MongoDB con su conteo estimado de documentos. " +
-    "Requiere admin_key para acceder.",
-    {
-      admin_key: z.string().describe("Clave de administrador requerida para acceder a este tool."),
-    },
-    async ({ admin_key }) => {
-      requireAdmin(admin_key);
+    "Lista todas las colecciones disponibles en MongoDB con su conteo estimado de documentos.",
+    {},
+    async () => {
       const database = await getDb();
       const collections = await database.listCollections({}, { nameOnly: true }).toArray();
       const names = collections.map((c) => c.name).sort();
@@ -38,13 +33,12 @@ export function register(server) {
   server.tool(
     "query_mongodb",
     "Ejecuta consultas de SOLO LECTURA en cualquier colección de MongoDB. " +
-    "Soporta find, count, distinct y aggregate. Requiere admin_key para acceder. " +
+    "Soporta find, count, distinct y aggregate. " +
     "IMPORTANTE para colecciones grandes (orders tiene 2.5M+ docs): " +
     "- Para contar sin filtro usa operation=count con filter vacío (usa estimado internamente). " +
     "- Siempre filtra por campos indexados (store_id, organization_id, created_at, status). " +
     "- En aggregates, pon $match PRIMERO para usar índices.",
     {
-      admin_key: z.string().describe("Clave de administrador requerida para acceder a este tool."),
       collection: z.string().describe(
         "Nombre de la colección: stores, orders, organizations, users, products, payments, sites, wallets, coupons, etc."
       ),
@@ -70,8 +64,7 @@ export function register(server) {
         'Pipeline JSON (solo aggregate). SIEMPRE inicia con $match para filtrar.'
       ),
     },
-    async ({ admin_key, collection, operation, filter, projection, sort, limit, distinctField, pipeline }) => {
-      requireAdmin(admin_key);
+    async ({ collection, operation, filter, projection, sort, limit, distinctField, pipeline }) => {
       const database = await getDb();
       const col = database.collection(collection);
       const parsedFilter = filter ? JSON.parse(filter) : {};
@@ -143,15 +136,12 @@ export function register(server) {
   server.tool(
     "get_collection_schema",
     "Muestra la estructura (campos) de un documento de una colección. " +
-    "Requiere admin_key para acceder. " +
     "Devuelve los campos del primer documento encontrado como referencia.",
     {
-      admin_key: z.string().describe("Clave de administrador requerida para acceder a este tool."),
       collection: z.string().describe("Nombre de la colección a inspeccionar"),
       sampleFilter: z.string().optional().describe('Filtro opcional para elegir un documento representativo. JSON. Default: {}'),
     },
-    async ({ admin_key, collection, sampleFilter }) => {
-      requireAdmin(admin_key);
+    async ({ collection, sampleFilter }) => {
       const database = await getDb();
       const filter = sampleFilter ? JSON.parse(sampleFilter) : {};
       const doc = await database.collection(collection).findOne(filter, { maxTimeMS: QUERY_TIMEOUT_MS });

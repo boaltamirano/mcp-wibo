@@ -17,7 +17,6 @@ Claude Desktop → MCP Server (stdio) → Wibo API (reportes)
 | `WIBO_API_KEY` | API key para Wibo Reports API |
 | `MONGODB_URL` | Connection string de MongoDB |
 | `MONGODB_DATABASE` | Nombre de la base de datos (default: `staging`) |
-| `ADMIN_KEY` | Clave para acceder a tools administrativos (list_collections, query_mongodb, get_collection_schema) |
 
 **Nunca hardcodear credenciales en el codigo.**
 
@@ -39,7 +38,6 @@ db.createUser({
 ```
 MONGODB_URL=mongodb+srv://mcp_readonly:PASSWORD@cluster/...
 MONGODB_DATABASE=NOMBRE_DB_PRODUCCION
-ADMIN_KEY=una_clave_segura_para_admin
 ```
 
 ### 3. Protecciones incluidas en el codigo
@@ -55,7 +53,7 @@ ADMIN_KEY=una_clave_segura_para_admin
 | Read preference | `secondaryPreferred` (no impacta primary) |
 | Conteos eficientes | `estimatedDocumentCount` para conteos sin filtro (O(1)) |
 | Cache | 6 horas para consultas frecuentes (stores, configs, conteos) |
-| Admin key | Tools genéricos de MongoDB requieren clave de administrador |
+| Write ops bloqueados | Operadores de modificacion ($set, $unset, $inc, etc.) rechazados |
 
 ## Cache en memoria
 
@@ -79,20 +77,18 @@ Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
 
 ### Tool `cache_stats`
 
-Muestra entradas activas y tamaño del cache. Disponible sin admin_key.
+Muestra entradas activas y tamaño del cache.
 
 ## Tools disponibles (18)
 
-### Publicos MongoDB (4)
+### MongoDB (7)
+- `list_collections` — listar todas las colecciones con conteo estimado
+- `query_mongodb` — find, count, distinct, aggregate sobre cualquier coleccion (solo lectura)
+- `get_collection_schema` — ver estructura/campos de una coleccion
 - `search_stores` — buscar comercios por nombre (disambiguation) **[cacheado]**
 - `get_store_config` — config de metodos de pago, POS, delivery **[cacheado]**
 - `get_payment_errors` — errores de pago por metodo
 - `get_payment_summary` — resumen de aprobacion/rechazo por metodo
-
-### Admin MongoDB (3) — requieren `admin_key`
-- `list_collections` — listar todas las colecciones con conteo estimado
-- `query_mongodb` — find, count, distinct, aggregate sobre cualquier coleccion
-- `get_collection_schema` — ver estructura/campos de una coleccion
 
 ### API Wibo (10)
 - `get_commercial_comparison`, `get_commercial_risk`, `get_transactions_daily`
@@ -116,5 +112,5 @@ La coleccion `orders` tiene 2.5M+ documentos. Para queries eficientes:
 
 ```bash
 npm install
-MONGODB_URL="..." MONGODB_DATABASE="..." WIBO_API_KEY="..." ADMIN_KEY="..." node index.js
+MONGODB_URL="..." MONGODB_DATABASE="..." WIBO_API_KEY="..." node index.js
 ```
