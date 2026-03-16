@@ -12,7 +12,13 @@ export const MAX_FIND_LIMIT = 200;
 export const DEFAULT_FIND_LIMIT = 50;
 export const MAX_AGGREGATE_LIMIT = 100;
 export const MAX_SEARCH_LIMIT = 500;
-export const FORBIDDEN_STAGES = ["$out", "$merge", "$collStats", "$indexStats", "$planCacheStats"];
+export const FORBIDDEN_STAGES = [
+  "$out", "$merge",                          // escritura
+  "$collStats", "$indexStats",               // metadata sensible
+  "$planCacheStats", "$currentOp",           // operaciones internas
+  "$listSessions", "$listLocalSessions",     // sesiones activas
+  "$setWindowFields",                        // puede consumir mucha memoria
+];
 
 // ─── Cache ───────────────────────────────────────────────────
 export const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas en ms

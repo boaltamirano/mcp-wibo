@@ -77,6 +77,15 @@ export function register(server) {
       const parsedFilter = filter ? JSON.parse(filter) : {};
       const isEmptyFilter = Object.keys(parsedFilter).length === 0;
 
+      // Bloquear operadores de modificación en filtros
+      const filterStr = JSON.stringify(parsedFilter);
+      const WRITE_OPS = ["$set", "$unset", "$inc", "$push", "$pull", "$rename", "$addToSet", "$pop", "$mul", "$min", "$max", "$currentDate"];
+      for (const op of WRITE_OPS) {
+        if (filterStr.includes(`"${op}"`)) {
+          throw new Error(`Operador ${op} no permitido. Solo lectura.`);
+        }
+      }
+
       switch (operation) {
         case "find": {
           const maxLimit = Math.min(limit || DEFAULT_FIND_LIMIT, MAX_FIND_LIMIT);
