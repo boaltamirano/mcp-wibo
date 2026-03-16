@@ -10,7 +10,7 @@ export async function getDb() {
     readPreference: "secondaryPreferred",
     maxPoolSize: 5,
     serverSelectionTimeoutMS: 10_000,
-    readConcern: "local",
+    readConcern: { level: "local" },
   });
   await mongoClient.connect();
   db = mongoClient.db(MONGODB_DATABASE);
