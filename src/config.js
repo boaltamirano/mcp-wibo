@@ -1,6 +1,6 @@
 // ─── Config y constantes ─────────────────────────────────────
 
-export const API_BASE_URL = "https://wibo-api-reports-qa.wibodev.com/api/v1/reports";
+export const API_BASE_URL = process.env.WIBO_API_URL || "https://wibo-api-reports.wibodev.com/api/v1/reports";
 export const API_KEY = process.env.WIBO_API_KEY;
 export const MONGODB_URL = process.env.MONGODB_URL;
 export const MONGODB_DATABASE = process.env.MONGODB_DATABASE || "staging";
