@@ -1,6 +1,6 @@
 // ============================================================
 //  MCP Server — Wibo Reports API + MongoDB
-//  v4.0 — Consultas dinámicas a MongoDB + API Wibo
+//  v5.0 — Optimizado para producción (2.5M+ docs)
 // ============================================================
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -14,6 +14,14 @@ const API_KEY = process.env.WIBO_API_KEY;
 const MONGODB_URL = process.env.MONGODB_URL;
 const MONGODB_DATABASE = process.env.MONGODB_DATABASE || "staging";
 
+// ─── Límites de seguridad ────────────────────────────────────
+const QUERY_TIMEOUT_MS = 30_000;   // 30s máximo por query
+const MAX_FIND_LIMIT = 200;        // máx docs en find
+const DEFAULT_FIND_LIMIT = 50;
+const MAX_AGGREGATE_LIMIT = 100;   // máx docs en aggregate
+const MAX_SEARCH_LIMIT = 500;      // máx en search_stores
+const FORBIDDEN_STAGES = ["$out", "$merge", "$collStats", "$indexStats", "$planCacheStats"];
+
 // ─── MongoDB singleton ──────────────────────────────────────
 let mongoClient = null;
 let db = null;
@@ -22,6 +30,8 @@ async function getDb() {
   if (db) return db;
   mongoClient = new MongoClient(MONGODB_URL, {
     readPreference: "secondaryPreferred",
+    maxPoolSize: 5,
+    serverSelectionTimeoutMS: 10_000,
   });
   await mongoClient.connect();
   db = mongoClient.db(MONGODB_DATABASE);
@@ -48,6 +58,7 @@ async function resolveStore(storeName) {
     .collection("stores")
     .find({ name: regex, is_deleted: { $ne: true } })
     .project({ _id: 1, name: 1, organization_id: 1, is_enabled: 1 })
+    .maxTimeMS(QUERY_TIMEOUT_MS)
     .limit(20)
     .toArray();
 
@@ -66,7 +77,6 @@ async function resolveStore(storeName) {
   };
 }
 
-// Resolver y validar — retorna { organizationId, storeId } o lanza error
 async function resolveOrThrow(storeName) {
   const result = await resolveStore(storeName);
   if (!result.found) throw new Error(result.message);
@@ -112,28 +122,30 @@ const commonParams = {
 };
 
 // ─── Servidor ────────────────────────────────────────────────
-const server = new McpServer({ name: "wibo-reports", version: "4.0.0" });
-
-// Stages de escritura prohibidos en aggregate
-const FORBIDDEN_STAGES = ["$out", "$merge"];
+const server = new McpServer({ name: "wibo-reports", version: "5.0.0" });
 
 // ════════════════════════════════════════════════════════════
-//  TOOL: list_collections — listar colecciones disponibles
+//  TOOL: list_collections
 // ════════════════════════════════════════════════════════════
 server.tool(
   "list_collections",
-  "Lista todas las colecciones disponibles en MongoDB con su conteo de documentos. " +
+  "Lista todas las colecciones disponibles en MongoDB con su conteo estimado de documentos. " +
   "Úsala PRIMERO para saber qué datos hay disponibles antes de hacer consultas.",
   {},
   async () => {
     const database = await getDb();
-    const collections = await database.listCollections().toArray();
-    const results = [];
-    for (const col of collections.sort((a, b) => a.name.localeCompare(b.name))) {
-      const count = await database.collection(col.name).estimatedDocumentCount();
-      results.push({ name: col.name, documents: count });
-    }
-    return ok({ total: results.length, collections: results });
+    const collections = await database.listCollections({}, { nameOnly: true }).toArray();
+    const names = collections.map((c) => c.name).sort();
+
+    // Conteo estimado en paralelo (O(1) por colección, usa metadata)
+    const counts = await Promise.all(
+      names.map(async (name) => {
+        const count = await database.collection(name).estimatedDocumentCount();
+        return { name, estimatedDocuments: count };
+      })
+    );
+
+    return ok({ total: counts.length, collections: counts });
   }
 );
 
@@ -143,48 +155,50 @@ server.tool(
 server.tool(
   "query_mongodb",
   "Ejecuta consultas de SOLO LECTURA en cualquier colección de MongoDB. " +
-  "Soporta find, count, distinct y aggregate. " +
-  "Úsala para cualquier consulta de datos: total de comercios, usuarios, órdenes, filtros complejos, agrupaciones, etc. " +
-  "Colecciones principales: stores, orders, organizations, users, products, payments, coupons, wallets, sites, etc. " +
-  "Usa list_collections para ver todas las disponibles.",
+  "Soporta find, count, distinct y aggregate. Todas las queries tienen timeout de 30s. " +
+  "IMPORTANTE para colecciones grandes (orders tiene 2.5M+ docs): " +
+  "- Para contar sin filtro usa operation=count con filter vacío (usa estimado internamente). " +
+  "- Siempre filtra por campos indexados (store_id, organization_id, created_at, status). " +
+  "- En aggregates, pon $match PRIMERO para usar índices. " +
+  "Colecciones principales: stores, orders, organizations, users, products, payments, coupons, wallets, sites.",
   {
     collection: z.string().describe(
       "Nombre de la colección: stores, orders, organizations, users, products, payments, sites, wallets, coupons, etc."
     ),
     operation: z.enum(["find", "count", "distinct", "aggregate"]).describe(
-      "find = buscar documentos, count = contar, distinct = valores únicos de un campo, aggregate = pipeline de agregación"
+      "find = buscar documentos, count = contar, distinct = valores únicos, aggregate = pipeline de agregación"
     ),
     filter: z.string().optional().describe(
-      'Filtro JSON. Ej: {"is_enabled": true}, {"status": 800}, {"created_at": {"$gte": "2024-01-01"}}. Default: {}'
+      'Filtro JSON. Ej: {"is_enabled": true}, {"store_id": "abc", "created_at": {"$gte": "2024-01-01"}}. Default: {}'
     ),
     projection: z.string().optional().describe(
       'Campos a devolver (solo find). JSON. Ej: {"name": 1, "status": 1, "_id": 0}'
     ),
     sort: z.string().optional().describe(
-      'Ordenamiento (solo find). JSON. Ej: {"created_at": -1} para más recientes primero'
+      'Ordenamiento (solo find). JSON. Ej: {"created_at": -1}. IMPORTANTE: ordenar por campos indexados.'
     ),
     limit: z.number().optional().describe(
-      "Máximo de documentos (solo find). Default: 50, máximo: 200"
+      `Máximo de documentos (solo find). Default: ${DEFAULT_FIND_LIMIT}, máximo: ${MAX_FIND_LIMIT}`
     ),
     distinctField: z.string().optional().describe(
-      "Campo para obtener valores únicos (solo operation=distinct). Ej: 'status', 'payment_details.payment_method.id'"
+      "Campo para valores únicos (solo distinct). Ej: 'status', 'payment_details.payment_method.id'"
     ),
     pipeline: z.string().optional().describe(
-      'Pipeline de agregación JSON (solo operation=aggregate). Ej: [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]'
+      'Pipeline JSON (solo aggregate). SIEMPRE inicia con $match para filtrar. Ej: [{"$match": {"store_id": "x"}}, {"$group": {"_id": "$status", "count": {"$sum": 1}}}]'
     ),
   },
   async ({ collection, operation, filter, projection, sort, limit, distinctField, pipeline }) => {
     const database = await getDb();
     const col = database.collection(collection);
-
     const parsedFilter = filter ? JSON.parse(filter) : {};
-    const maxLimit = Math.min(limit || 50, 200);
+    const isEmptyFilter = Object.keys(parsedFilter).length === 0;
 
     switch (operation) {
       case "find": {
+        const maxLimit = Math.min(limit || DEFAULT_FIND_LIMIT, MAX_FIND_LIMIT);
         const parsedProjection = projection ? JSON.parse(projection) : undefined;
         const parsedSort = sort ? JSON.parse(sort) : undefined;
-        let cursor = col.find(parsedFilter);
+        let cursor = col.find(parsedFilter).maxTimeMS(QUERY_TIMEOUT_MS);
         if (parsedProjection) cursor = cursor.project(parsedProjection);
         if (parsedSort) cursor = cursor.sort(parsedSort);
         cursor = cursor.limit(maxLimit);
@@ -193,30 +207,46 @@ server.tool(
       }
 
       case "count": {
-        const count = await col.countDocuments(parsedFilter);
-        return ok({ collection, operation, filter: parsedFilter, count });
+        // Para conteos sin filtro usar estimatedDocumentCount (O(1), no escanea)
+        const count = isEmptyFilter
+          ? await col.estimatedDocumentCount()
+          : await col.countDocuments(parsedFilter, { maxTimeMS: QUERY_TIMEOUT_MS });
+        return ok({
+          collection,
+          operation,
+          filter: parsedFilter,
+          count,
+          note: isEmptyFilter ? "Conteo estimado (instantáneo)" : "Conteo exacto",
+        });
       }
 
       case "distinct": {
         if (!distinctField) throw new Error("distinctField es requerido para operation=distinct");
-        const values = await col.distinct(distinctField, parsedFilter);
+        const values = await col.distinct(distinctField, parsedFilter, { maxTimeMS: QUERY_TIMEOUT_MS });
         return ok({ collection, operation, field: distinctField, count: values.length, values });
       }
 
       case "aggregate": {
         if (!pipeline) throw new Error("pipeline es requerido para operation=aggregate");
         const parsedPipeline = JSON.parse(pipeline);
-        // Validar que no hay stages de escritura
+
+        // Validar stages prohibidos
         for (const stage of parsedPipeline) {
           const stageKey = Object.keys(stage)[0];
           if (FORBIDDEN_STAGES.includes(stageKey)) {
-            throw new Error(`Stage ${stageKey} no está permitido. Solo lectura.`);
+            throw new Error(`Stage ${stageKey} no permitido (solo lectura).`);
           }
         }
-        // Agregar $limit al final si no hay uno
+
+        // Agregar $limit si no hay uno
         const hasLimit = parsedPipeline.some((s) => "$limit" in s);
-        if (!hasLimit) parsedPipeline.push({ $limit: maxLimit });
-        const results = await col.aggregate(parsedPipeline).toArray();
+        if (!hasLimit) parsedPipeline.push({ $limit: MAX_AGGREGATE_LIMIT });
+
+        const results = await col.aggregate(parsedPipeline, {
+          maxTimeMS: QUERY_TIMEOUT_MS,
+          allowDiskUse: false,
+        }).toArray();
+
         return ok({ collection, operation, count: results.length, results });
       }
     }
@@ -224,17 +254,55 @@ server.tool(
 );
 
 // ════════════════════════════════════════════════════════════
-//  TOOL: search_stores — buscar comercios por nombre
+//  TOOL: get_collection_schema — estructura de una colección
+// ════════════════════════════════════════════════════════════
+server.tool(
+  "get_collection_schema",
+  "Muestra la estructura (campos) de un documento de una colección. " +
+  "Úsala para entender qué campos tiene una colección antes de hacer queries. " +
+  "Devuelve los campos del primer documento encontrado como referencia.",
+  {
+    collection: z.string().describe("Nombre de la colección a inspeccionar"),
+    sampleFilter: z.string().optional().describe('Filtro opcional para elegir un documento representativo. JSON. Default: {}'),
+  },
+  async ({ collection, sampleFilter }) => {
+    const database = await getDb();
+    const filter = sampleFilter ? JSON.parse(sampleFilter) : {};
+    const doc = await database.collection(collection).findOne(filter, { maxTimeMS: QUERY_TIMEOUT_MS });
+
+    if (!doc) return ok({ collection, message: "No se encontró ningún documento con ese filtro." });
+
+    // Extraer estructura recursiva (hasta 3 niveles)
+    function getSchema(obj, depth = 0) {
+      if (depth > 3 || obj === null || obj === undefined) return typeof obj;
+      if (Array.isArray(obj)) {
+        return obj.length > 0 ? [`${getSchema(obj[0], depth + 1)}`] : ["empty array"];
+      }
+      if (typeof obj === "object" && !(obj instanceof Date)) {
+        const schema = {};
+        for (const [key, val] of Object.entries(obj)) {
+          schema[key] = getSchema(val, depth + 1);
+        }
+        return schema;
+      }
+      return typeof obj;
+    }
+
+    return ok({ collection, fields: Object.keys(doc), schema: getSchema(doc) });
+  }
+);
+
+// ════════════════════════════════════════════════════════════
+//  TOOL: search_stores
 // ════════════════════════════════════════════════════════════
 server.tool(
   "search_stores",
   "Busca comercios por nombre. Úsala SIEMPRE antes de consultar datos si no conoces el nombre exacto. " +
   "Devuelve lista de comercios con su nombre, organización y estado. " +
-  "Si el usuario dice un nombre parcial o ambiguo (ej: 'Kiosko'), esta herramienta muestra las opciones. " +
-  "Para listar TODOS los comercios, usa query vacío o '*'.",
+  "Para listar TODOS los comercios, usa query '*'.",
   {
     query: z.string().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko', 'Pollo'. Usa '*' para listar todos."),
-    limit: z.number().optional().describe("Máximo de resultados. Default: 100"),
+    limit: z.number().optional().describe(`Máximo de resultados. Default: 100, máximo: ${MAX_SEARCH_LIMIT}`),
   },
   async ({ query, limit = 100 }) => {
     const database = await getDb();
@@ -244,10 +312,10 @@ server.tool(
       match.name = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
     }
 
-    const maxLimit = Math.min(limit, 500);
+    const maxLimit = Math.min(limit, MAX_SEARCH_LIMIT);
 
-    // Contar total antes del limit
-    const totalCount = await database.collection("stores").countDocuments(match);
+    // Contar total (stores es colección pequeña, countDocuments es OK)
+    const totalCount = await database.collection("stores").countDocuments(match, { maxTimeMS: QUERY_TIMEOUT_MS });
 
     const stores = await database.collection("stores").aggregate([
       { $match: match },
@@ -270,7 +338,7 @@ server.tool(
         },
       },
       { $limit: maxLimit },
-    ]).toArray();
+    ], { maxTimeMS: QUERY_TIMEOUT_MS }).toArray();
 
     if (stores.length === 0) {
       return ok({ message: `No se encontraron comercios con "${query}".`, total: 0, results: [] });
@@ -285,13 +353,12 @@ server.tool(
 );
 
 // ════════════════════════════════════════════════════════════
-//  TOOL: get_store_config — configuración de un comercio
+//  TOOL: get_store_config
 // ════════════════════════════════════════════════════════════
 server.tool(
   "get_store_config",
   "Muestra la configuración de un comercio: métodos de pago habilitados, integraciones POS activas, " +
-  "métodos de entrega y configuración general. " +
-  "Úsala para: qué métodos de pago tiene, qué POS usa, si tiene delivery, si acepta cupones.",
+  "métodos de entrega y configuración general.",
   {
     storeName: storeNameParam,
   },
@@ -302,7 +369,7 @@ server.tool(
 
     const store = await database.collection("stores").findOne(
       { _id: result.store._id },
-      { projection: { name: 1, settings: 1, information: 1 } }
+      { projection: { name: 1, settings: 1, information: 1 }, maxTimeMS: QUERY_TIMEOUT_MS }
     );
 
     if (!store || !store.settings) {
@@ -311,7 +378,6 @@ server.tool(
 
     const s = store.settings;
 
-    // Métodos de pago habilitados
     const enabledPayments = [];
     const webpaySettings = s.payment_methods?.webpay?.settings || {};
     for (const [method, config] of Object.entries(webpaySettings)) {
@@ -319,26 +385,21 @@ server.tool(
     }
     if (s.payment_methods?.wallet?.is_enabled) enabledPayments.push("wallet");
     if (s.payment_methods?.cards?.is_enabled) {
-      const cardSettings = s.payment_methods.cards.settings || {};
-      for (const [method, config] of Object.entries(cardSettings)) {
+      for (const [method, config] of Object.entries(s.payment_methods.cards.settings || {})) {
         if (config.is_enabled) enabledPayments.push(`cards:${method}`);
       }
     }
     if (s.payment_methods?.benefits?.is_enabled) {
-      const benefitSettings = s.payment_methods.benefits.settings || {};
-      for (const [method, config] of Object.entries(benefitSettings)) {
+      for (const [method, config] of Object.entries(s.payment_methods.benefits.settings || {})) {
         if (config.is_enabled) enabledPayments.push(`benefits:${method}`);
       }
     }
 
-    // POS activos
     const activePOS = [];
     for (const [pos, enabled] of Object.entries(s.pos_settings || {})) {
-      if (pos === "additional_settings") continue;
-      if (enabled) activePOS.push(pos);
+      if (pos !== "additional_settings" && enabled) activePOS.push(pos);
     }
 
-    // Delivery methods
     const enabledDelivery = [];
     for (const [method, config] of Object.entries(s.delivery_methods || {})) {
       if (config.is_enabled) enabledDelivery.push(method);
@@ -362,19 +423,16 @@ server.tool(
 );
 
 // ════════════════════════════════════════════════════════════
-//  TOOL: get_payment_errors — errores de pago (cualquier método)
+//  TOOL: get_payment_errors
 // ════════════════════════════════════════════════════════════
 server.tool(
   "get_payment_errors",
   "Analiza errores de pago de cualquier método (getnet, transbank, fpay, mercadopago, klap, niubiz, etc). " +
-  "Agrupa errores por código y mensaje, muestra frecuencia y porcentaje. " +
-  "Úsala para: errores de Getnet, fallos de Transbank, rechazos de pago, diagnóstico de problemas de cobro, " +
-  "errores más comunes, tasa de error por método de pago.",
+  "Agrupa errores por código y mensaje, muestra frecuencia y porcentaje.",
   {
     storeName: storeNameParam,
     paymentMethod: z.string().optional().describe(
-      "Método de pago a filtrar: getnet, transbank, fpay, mercadopago, klap, niubiz, cash, etc. " +
-      "Si se omite, muestra errores de TODOS los métodos."
+      "Método de pago a filtrar: getnet, transbank, fpay, mercadopago, klap, niubiz, cash, etc. Omitir = todos."
     ),
     months: z.number().optional().describe("Meses hacia atrás a consultar. Default: 3"),
   },
@@ -393,10 +451,8 @@ server.tool(
       match["payment_details.payment_method.id"] = paymentMethod;
     }
 
-    // Total de órdenes con este filtro
-    const totalOrders = await database.collection("orders").countDocuments(match);
+    const totalOrders = await database.collection("orders").countDocuments(match, { maxTimeMS: QUERY_TIMEOUT_MS });
 
-    // Agregar errores (responseCode != 0 y != null)
     const errorAgg = await database.collection("orders").aggregate([
       { $match: { ...match, "payment.request.data.response.responseCode": { $exists: true, $ne: 0 } } },
       {
@@ -412,14 +468,13 @@ server.tool(
       },
       { $sort: { count: -1 } },
       { $limit: 20 },
-    ]).toArray();
+    ], { maxTimeMS: QUERY_TIMEOUT_MS, allowDiskUse: false }).toArray();
 
-    // Órdenes sin respuesta de pago (posible error)
     const noResponseCount = await database.collection("orders").countDocuments({
       ...match,
       "payment.request.data.response": { $exists: false },
       "payment_details.payment_method.id": { $exists: true },
-    });
+    }, { maxTimeMS: QUERY_TIMEOUT_MS });
 
     const errors = errorAgg.map((e) => ({
       paymentMethod: e._id.paymentMethod || "desconocido",
@@ -442,13 +497,11 @@ server.tool(
 );
 
 // ════════════════════════════════════════════════════════════
-//  TOOL: get_payment_summary — resumen de pagos por método
+//  TOOL: get_payment_summary
 // ════════════════════════════════════════════════════════════
 server.tool(
   "get_payment_summary",
-  "Resumen de pagos por método: total de órdenes, aprobadas, rechazadas y tasa de éxito por cada método de pago. " +
-  "Úsala para: comparar métodos de pago, ver cuál funciona mejor, tasa de aprobación, " +
-  "resumen general de pagos, diagnóstico de rendimiento de cobros.",
+  "Resumen de pagos por método: total de órdenes, aprobadas, rechazadas y tasa de éxito por cada método de pago.",
   {
     storeName: storeNameParam,
     months: z.number().optional().describe("Meses hacia atrás. Default: 3"),
@@ -473,15 +526,13 @@ server.tool(
           _id: "$payment_details.payment_method.id",
           total: { $sum: 1 },
           approved: {
-            $sum: {
-              $cond: [{ $eq: ["$payment.request.data.response.responseCode", 0] }, 1, 0],
-            },
+            $sum: { $cond: [{ $eq: ["$payment.request.data.response.responseCode", 0] }, 1, 0] },
           },
           totalAmount: { $sum: { $ifNull: ["$payment_details.amounts.total", 0] } },
         },
       },
       { $sort: { total: -1 } },
-    ]).toArray();
+    ], { maxTimeMS: QUERY_TIMEOUT_MS, allowDiskUse: false }).toArray();
 
     const results = summary.map((s) => ({
       paymentMethod: s._id,
@@ -506,7 +557,7 @@ server.tool(
 );
 
 // ════════════════════════════════════════════════════════════
-//  TOOLS existentes de API Wibo (ahora con storeName)
+//  TOOLS de API Wibo
 // ════════════════════════════════════════════════════════════
 
 async function callWiboWithStore(path, storeName, extraParams = {}) {
@@ -515,110 +566,76 @@ async function callWiboWithStore(path, storeName, extraParams = {}) {
   return ok(data);
 }
 
-// 1. Comparación comercial
-server.tool(
-  "get_commercial_comparison",
-  "Compara métricas de ventas de cada tienda entre el período actual y el anterior. " +
-  "Úsala para: desempeño, ventas, crecimiento, comparativas, variación, si mejoraron o empeoraron, " +
-  "ranking de tiendas, evolución entre períodos, quién subió o bajó. " +
-  "Devuelve totalTransactions, successfulTransactions, totalSales y variación % con direction up/down.",
+server.tool("get_commercial_comparison",
+  "Compara métricas de ventas entre el período actual y el anterior. Para: desempeño, ventas, crecimiento, ranking.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/commercial/comparison", storeName, { period, startDate, endDate })
 );
 
-// 2. Riesgo comercial
-server.tool(
-  "get_commercial_risk",
-  "Detecta tiendas en riesgo: caída fuerte de ventas vs período anterior y tiendas sin actividad reciente. " +
-  "Úsala para: alertas, riesgos, caídas de ventas, tiendas inactivas, sin transacciones, días sin vender.",
-  {
-    ...commonParams,
+server.tool("get_commercial_risk",
+  "Detecta tiendas en riesgo: caída de ventas y tiendas sin actividad. Para: alertas, riesgos, tiendas inactivas.",
+  { ...commonParams,
     dropThreshold: z.number().optional().describe("% mínimo de caída para alertar. Default: 60"),
-    zeroDays: z.number().optional().describe("Días consecutivos sin ventas para considerar inactiva. Default: 3"),
+    zeroDays: z.number().optional().describe("Días sin ventas para considerar inactiva. Default: 3"),
   },
   async ({ storeName, period, startDate, endDate, dropThreshold, zeroDays }) =>
     callWiboWithStore("/commercial/risk", storeName, { period, startDate, endDate, dropThreshold, zeroDays })
 );
 
-// 3. Transacciones diarias
-server.tool(
-  "get_transactions_daily",
-  "Transacciones diarias por tienda con métricas detalladas y promedios. " +
-  "Úsala para: actividad diaria, detalle por tienda por fecha, ventas diarias, ticket promedio diario.",
+server.tool("get_transactions_daily",
+  "Transacciones diarias por tienda con métricas y promedios. Para: actividad diaria, ventas diarias.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/transactions/daily", storeName, { period, startDate, endDate })
 );
 
-// 4. Totales de transacciones
-server.tool(
-  "get_transactions_totals",
-  "Totales agregados a nivel de toda la plataforma Wibo. " +
-  "Úsala para: resumen global, KPIs totales, total de ventas, datos consolidados de la organización.",
+server.tool("get_transactions_totals",
+  "Totales agregados de toda la plataforma. Para: resumen global, KPIs totales.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/transactions/totals", storeName, { period, startDate, endDate })
 );
 
-// 5. Bajo volumen de transacciones
-server.tool(
-  "get_low_transactions",
-  "Lista tiendas con transacciones semanales por debajo de un umbral mínimo. " +
-  "Úsala para: tiendas con bajo rendimiento, poca actividad, alertas de bajo tráfico.",
-  {
-    ...commonParams,
-    threshold: z.number().optional().describe("Umbral mínimo de transacciones semanales. Default: 140"),
+server.tool("get_low_transactions",
+  "Tiendas con transacciones semanales bajo umbral mínimo. Para: bajo rendimiento, alertas.",
+  { ...commonParams,
+    threshold: z.number().optional().describe("Umbral mínimo semanal. Default: 140"),
   },
   async ({ storeName, period, startDate, endDate, threshold }) =>
     callWiboWithStore("/transactions/low-transactions", storeName, { period, startDate, endDate, threshold })
 );
 
-// 6. Uso de features
-server.tool(
-  "get_features_usage",
-  "Tasa de adopción y uso de funcionalidades: cupones, wallet/loyalty, beneficiarios, promociones. " +
-  "Úsala para: uso de features, adopción de cupones, cuántos usan loyalty, adopción de producto.",
+server.tool("get_features_usage",
+  "Adopción de funcionalidades: cupones, wallet, beneficiarios, promociones.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/features/usage", storeName, { period, startDate, endDate })
 );
 
-// 7. Pagos rechazados
-server.tool(
-  "get_payments_rejected",
-  "Análisis de transacciones rechazadas: desglose por motivo de rechazo y método de pago. " +
-  "Úsala para: pagos fallidos, motivos de rechazo, tasa de rechazo, rechazos financieros vs técnicos.",
+server.tool("get_payments_rejected",
+  "Transacciones rechazadas: desglose por motivo y método de pago.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/payments/rejected", storeName, { period, startDate, endDate })
 );
 
-// 8. Métodos de pago
-server.tool(
-  "get_payments_methods",
-  "Estadísticas por método de pago: tasa de aprobación, rechazo y errores técnicos por medio. " +
-  "Úsala para: medios de pago, efectivo vs tarjeta vs QR, tasa de éxito por forma de pago.",
+server.tool("get_payments_methods",
+  "Estadísticas por método de pago: aprobación, rechazo, errores técnicos.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/payments/methods", storeName, { period, startDate, endDate })
 );
 
-// 9. Errores de POS
-server.tool(
-  "get_system_pos_errors",
-  "Desglose de errores del sistema POS agrupados por sistema y tipo de error. " +
-  "Úsala para: errores de POS, fallas del sistema, qué POS falla más (fudo, mrc, justo, nutriserv, rappi_turbo).",
+server.tool("get_system_pos_errors",
+  "Errores del sistema POS agrupados por sistema y tipo. Para: fallas de fudo, mrc, justo, nutriserv.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/system/pos-errors", storeName, { period, startDate, endDate })
 );
 
-// 10. Experiencia de usuario
-server.tool(
-  "get_user_experience",
-  "Métricas de experiencia de usuario en el flujo de compra. " +
-  "Úsala para: UX, tasa de abandono, tiempo promedio de compra, reintentos de pago, % de abandono.",
+server.tool("get_user_experience",
+  "Métricas de UX en el flujo de compra. Para: abandono, reintentos, completitud.",
   { ...commonParams },
   async ({ storeName, period, startDate, endDate }) =>
     callWiboWithStore("/user-experience", storeName, { period, startDate, endDate })
@@ -627,4 +644,4 @@ server.tool(
 // ─── Iniciar ────────────────────────────────────────────────
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("✅ Wibo Reports MCP v4.0 — 16 tools activos (10 API + 6 MongoDB)");
+console.error("✅ Wibo Reports MCP v5.0 — 17 tools (10 API + 7 MongoDB) — Optimizado para producción");
