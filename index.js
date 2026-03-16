@@ -1,6 +1,6 @@
 // ============================================================
 //  MCP Server — Wibo Reports API + MongoDB
-//  v3.0 — Búsqueda por nombre de comercio + errores de pago
+//  v4.0 — Consultas dinámicas a MongoDB + API Wibo
 // ============================================================
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -112,7 +112,116 @@ const commonParams = {
 };
 
 // ─── Servidor ────────────────────────────────────────────────
-const server = new McpServer({ name: "wibo-reports", version: "3.0.0" });
+const server = new McpServer({ name: "wibo-reports", version: "4.0.0" });
+
+// Stages de escritura prohibidos en aggregate
+const FORBIDDEN_STAGES = ["$out", "$merge"];
+
+// ════════════════════════════════════════════════════════════
+//  TOOL: list_collections — listar colecciones disponibles
+// ════════════════════════════════════════════════════════════
+server.tool(
+  "list_collections",
+  "Lista todas las colecciones disponibles en MongoDB con su conteo de documentos. " +
+  "Úsala PRIMERO para saber qué datos hay disponibles antes de hacer consultas.",
+  {},
+  async () => {
+    const database = await getDb();
+    const collections = await database.listCollections().toArray();
+    const results = [];
+    for (const col of collections.sort((a, b) => a.name.localeCompare(b.name))) {
+      const count = await database.collection(col.name).estimatedDocumentCount();
+      results.push({ name: col.name, documents: count });
+    }
+    return ok({ total: results.length, collections: results });
+  }
+);
+
+// ════════════════════════════════════════════════════════════
+//  TOOL: query_mongodb — consulta genérica de lectura
+// ════════════════════════════════════════════════════════════
+server.tool(
+  "query_mongodb",
+  "Ejecuta consultas de SOLO LECTURA en cualquier colección de MongoDB. " +
+  "Soporta find, count, distinct y aggregate. " +
+  "Úsala para cualquier consulta de datos: total de comercios, usuarios, órdenes, filtros complejos, agrupaciones, etc. " +
+  "Colecciones principales: stores, orders, organizations, users, products, payments, coupons, wallets, sites, etc. " +
+  "Usa list_collections para ver todas las disponibles.",
+  {
+    collection: z.string().describe(
+      "Nombre de la colección: stores, orders, organizations, users, products, payments, sites, wallets, coupons, etc."
+    ),
+    operation: z.enum(["find", "count", "distinct", "aggregate"]).describe(
+      "find = buscar documentos, count = contar, distinct = valores únicos de un campo, aggregate = pipeline de agregación"
+    ),
+    filter: z.string().optional().describe(
+      'Filtro JSON. Ej: {"is_enabled": true}, {"status": 800}, {"created_at": {"$gte": "2024-01-01"}}. Default: {}'
+    ),
+    projection: z.string().optional().describe(
+      'Campos a devolver (solo find). JSON. Ej: {"name": 1, "status": 1, "_id": 0}'
+    ),
+    sort: z.string().optional().describe(
+      'Ordenamiento (solo find). JSON. Ej: {"created_at": -1} para más recientes primero'
+    ),
+    limit: z.number().optional().describe(
+      "Máximo de documentos (solo find). Default: 50, máximo: 200"
+    ),
+    distinctField: z.string().optional().describe(
+      "Campo para obtener valores únicos (solo operation=distinct). Ej: 'status', 'payment_details.payment_method.id'"
+    ),
+    pipeline: z.string().optional().describe(
+      'Pipeline de agregación JSON (solo operation=aggregate). Ej: [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]'
+    ),
+  },
+  async ({ collection, operation, filter, projection, sort, limit, distinctField, pipeline }) => {
+    const database = await getDb();
+    const col = database.collection(collection);
+
+    const parsedFilter = filter ? JSON.parse(filter) : {};
+    const maxLimit = Math.min(limit || 50, 200);
+
+    switch (operation) {
+      case "find": {
+        const parsedProjection = projection ? JSON.parse(projection) : undefined;
+        const parsedSort = sort ? JSON.parse(sort) : undefined;
+        let cursor = col.find(parsedFilter);
+        if (parsedProjection) cursor = cursor.project(parsedProjection);
+        if (parsedSort) cursor = cursor.sort(parsedSort);
+        cursor = cursor.limit(maxLimit);
+        const docs = await cursor.toArray();
+        return ok({ collection, operation, count: docs.length, limit: maxLimit, results: docs });
+      }
+
+      case "count": {
+        const count = await col.countDocuments(parsedFilter);
+        return ok({ collection, operation, filter: parsedFilter, count });
+      }
+
+      case "distinct": {
+        if (!distinctField) throw new Error("distinctField es requerido para operation=distinct");
+        const values = await col.distinct(distinctField, parsedFilter);
+        return ok({ collection, operation, field: distinctField, count: values.length, values });
+      }
+
+      case "aggregate": {
+        if (!pipeline) throw new Error("pipeline es requerido para operation=aggregate");
+        const parsedPipeline = JSON.parse(pipeline);
+        // Validar que no hay stages de escritura
+        for (const stage of parsedPipeline) {
+          const stageKey = Object.keys(stage)[0];
+          if (FORBIDDEN_STAGES.includes(stageKey)) {
+            throw new Error(`Stage ${stageKey} no está permitido. Solo lectura.`);
+          }
+        }
+        // Agregar $limit al final si no hay uno
+        const hasLimit = parsedPipeline.some((s) => "$limit" in s);
+        if (!hasLimit) parsedPipeline.push({ $limit: maxLimit });
+        const results = await col.aggregate(parsedPipeline).toArray();
+        return ok({ collection, operation, count: results.length, results });
+      }
+    }
+  }
+);
 
 // ════════════════════════════════════════════════════════════
 //  TOOL: search_stores — buscar comercios por nombre
@@ -121,16 +230,27 @@ server.tool(
   "search_stores",
   "Busca comercios por nombre. Úsala SIEMPRE antes de consultar datos si no conoces el nombre exacto. " +
   "Devuelve lista de comercios con su nombre, organización y estado. " +
-  "Si el usuario dice un nombre parcial o ambiguo (ej: 'Kiosko'), esta herramienta muestra las opciones.",
+  "Si el usuario dice un nombre parcial o ambiguo (ej: 'Kiosko'), esta herramienta muestra las opciones. " +
+  "Para listar TODOS los comercios, usa query vacío o '*'.",
   {
-    query: z.string().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko', 'Pollo', 'Subway'"),
+    query: z.string().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko', 'Pollo'. Usa '*' para listar todos."),
+    limit: z.number().optional().describe("Máximo de resultados. Default: 100"),
   },
-  async ({ query }) => {
+  async ({ query, limit = 100 }) => {
     const database = await getDb();
-    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const isAll = query === "*" || query === "" || query === "todos" || query === "all";
+    const match = { is_deleted: { $ne: true } };
+    if (!isAll) {
+      match.name = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    }
+
+    const maxLimit = Math.min(limit, 500);
+
+    // Contar total antes del limit
+    const totalCount = await database.collection("stores").countDocuments(match);
 
     const stores = await database.collection("stores").aggregate([
-      { $match: { name: regex, is_deleted: { $ne: true } } },
+      { $match: match },
       {
         $lookup: {
           from: "organizations",
@@ -149,13 +269,18 @@ server.tool(
           isEnabled: "$is_enabled",
         },
       },
-      { $limit: 20 },
+      { $limit: maxLimit },
     ]).toArray();
 
     if (stores.length === 0) {
-      return ok({ message: `No se encontraron comercios con "${query}".`, results: [] });
+      return ok({ message: `No se encontraron comercios con "${query}".`, total: 0, results: [] });
     }
-    return ok({ message: `Se encontraron ${stores.length} comercio(s).`, results: stores });
+    return ok({
+      message: `Se encontraron ${totalCount} comercio(s)${totalCount > maxLimit ? ` (mostrando ${maxLimit})` : ""}.`,
+      total: totalCount,
+      showing: stores.length,
+      results: stores,
+    });
   }
 );
 
@@ -502,4 +627,4 @@ server.tool(
 // ─── Iniciar ────────────────────────────────────────────────
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("✅ Wibo Reports MCP v3.0 — 14 tools activos (10 API + 4 MongoDB)");
+console.error("✅ Wibo Reports MCP v4.0 — 16 tools activos (10 API + 6 MongoDB)");
