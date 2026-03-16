@@ -25,12 +25,14 @@ export async function wiboFetch(path, params = {}) {
       url.searchParams.set(k, String(v));
     }
   });
-  const res = await fetch(url.toString(), {
+  const fullUrl = url.toString();
+  console.error(`[wibo] ${path} → ${fullUrl}`);
+  const res = await fetch(fullUrl, {
     headers: { "X-API-Key": API_KEY },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(`Wibo API ${res.status}: ${JSON.stringify(err.message || err)}`);
+    throw new Error(`Wibo API ${res.status} (${fullUrl}): ${JSON.stringify(err.message || err)}`);
   }
   return res.json();
 }
