@@ -42,7 +42,7 @@ NC='\033[0m'
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║       Wibo MCP — Instalador v3.0         ║"
+echo "║       Wibo MCP — Instalador v6.0         ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
@@ -93,10 +93,18 @@ fi
 echo ""
 echo -e "${YELLOW}→${NC} Descargando desde GitHub..."
 
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/src/tools"
 
 curl -fsSL "$RAW_URL/index.js" -o "$INSTALL_DIR/index.js"
 curl -fsSL "$RAW_URL/package.json" -o "$INSTALL_DIR/package.json"
+
+for f in config.js cache.js db.js auth.js store-resolver.js api.js server.js; do
+  curl -fsSL "$RAW_URL/src/$f" -o "$INSTALL_DIR/src/$f"
+done
+
+for f in admin.js stores.js payments.js api-commercial.js api-transactions.js api-payments.js api-features.js cache-stats.js; do
+  curl -fsSL "$RAW_URL/src/tools/$f" -o "$INSTALL_DIR/src/tools/$f"
+done
 
 echo -e "${GREEN}✓${NC} Archivos descargados en $INSTALL_DIR"
 

@@ -7,6 +7,7 @@ MCP Server para Claude Desktop que conecta con la API de reportes de Wibo y Mong
 ```
 Claude Desktop → MCP Server (stdio) → Wibo API (reportes)
                                      → MongoDB read-only (todas las colecciones)
+                                     → Cache en memoria (TTL 6h)
 ```
 
 ## Variables de entorno (requeridas)
@@ -16,6 +17,7 @@ Claude Desktop → MCP Server (stdio) → Wibo API (reportes)
 | `WIBO_API_KEY` | API key para Wibo Reports API |
 | `MONGODB_URL` | Connection string de MongoDB |
 | `MONGODB_DATABASE` | Nombre de la base de datos (default: `staging`) |
+| `ADMIN_KEY` | Clave para acceder a tools administrativos (list_collections, query_mongodb, get_collection_schema) |
 
 **Nunca hardcodear credenciales en el codigo.**
 
@@ -37,6 +39,7 @@ db.createUser({
 ```
 MONGODB_URL=mongodb+srv://mcp_readonly:PASSWORD@cluster/...
 MONGODB_DATABASE=NOMBRE_DB_PRODUCCION
+ADMIN_KEY=una_clave_segura_para_admin
 ```
 
 ### 3. Protecciones incluidas en el codigo
@@ -51,25 +54,54 @@ MONGODB_DATABASE=NOMBRE_DB_PRODUCCION
 | Pool limitado | Max 5 conexiones simultaneas |
 | Read preference | `secondaryPreferred` (no impacta primary) |
 | Conteos eficientes | `estimatedDocumentCount` para conteos sin filtro (O(1)) |
+| Cache | 6 horas para consultas frecuentes (stores, configs, conteos) |
+| Admin key | Tools genéricos de MongoDB requieren clave de administrador |
 
-## Tools disponibles (17)
+## Cache en memoria
 
-### Genericos MongoDB (3)
+Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
+
+### Operaciones cacheadas
+
+| Operacion | Cache key | TTL |
+|-----------|-----------|-----|
+| Resolución de store por nombre | `resolve:{nombre}` | 6h |
+| Búsqueda de stores | `stores:{query}:{limit}` | 6h |
+| Configuración de store | `config:{storeId}` | 6h |
+| Conteo sin filtro (query_mongodb) | `count:{coleccion}` | 6h |
+
+### Operaciones NO cacheadas
+
+- 10 tools de API Wibo (datos time-series)
+- `get_payment_errors` y `get_payment_summary` (datos recientes)
+- `query_mongodb` find/aggregate/distinct (consultas arbitrarias)
+- `list_collections` y `get_collection_schema` (tools admin)
+
+### Tool `cache_stats`
+
+Muestra entradas activas y tamaño del cache. Disponible sin admin_key.
+
+## Tools disponibles (18)
+
+### Publicos MongoDB (4)
+- `search_stores` — buscar comercios por nombre (disambiguation) **[cacheado]**
+- `get_store_config` — config de metodos de pago, POS, delivery **[cacheado]**
+- `get_payment_errors` — errores de pago por metodo
+- `get_payment_summary` — resumen de aprobacion/rechazo por metodo
+
+### Admin MongoDB (3) — requieren `admin_key`
 - `list_collections` — listar todas las colecciones con conteo estimado
 - `query_mongodb` — find, count, distinct, aggregate sobre cualquier coleccion
 - `get_collection_schema` — ver estructura/campos de una coleccion
-
-### Especializados MongoDB (4)
-- `search_stores` — buscar comercios por nombre (disambiguation)
-- `get_store_config` — config de metodos de pago, POS, delivery
-- `get_payment_errors` — errores de pago por metodo
-- `get_payment_summary` — resumen de aprobacion/rechazo por metodo
 
 ### API Wibo (10)
 - `get_commercial_comparison`, `get_commercial_risk`, `get_transactions_daily`
 - `get_transactions_totals`, `get_low_transactions`, `get_features_usage`
 - `get_payments_rejected`, `get_payments_methods`, `get_system_pos_errors`
 - `get_user_experience`
+
+### Utilidad (1)
+- `cache_stats` — estadisticas del cache en memoria
 
 ## Buenas practicas para queries en colecciones grandes
 
@@ -84,5 +116,5 @@ La coleccion `orders` tiene 2.5M+ documentos. Para queries eficientes:
 
 ```bash
 npm install
-MONGODB_URL="..." MONGODB_DATABASE="..." WIBO_API_KEY="..." node index.js
+MONGODB_URL="..." MONGODB_DATABASE="..." WIBO_API_KEY="..." ADMIN_KEY="..." node index.js
 ```
