@@ -102,7 +102,7 @@ for f in config.js cache.js db.js store-resolver.js api.js server.js; do
   curl -fsSL "$RAW_URL/src/$f" -o "$INSTALL_DIR/src/$f"
 done
 
-for f in admin.js stores.js payments.js api-commercial.js api-transactions.js api-payments.js api-features.js cache-stats.js report-guide.js; do
+for f in admin.js stores.js payments.js organizations.js api-commercial.js api-transactions.js api-payments.js api-features.js cache-stats.js report-guide.js; do
   curl -fsSL "$RAW_URL/src/tools/$f" -o "$INSTALL_DIR/src/tools/$f"
 done
 
