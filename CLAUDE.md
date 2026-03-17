@@ -54,6 +54,8 @@ MONGODB_DATABASE=NOMBRE_DB_PRODUCCION
 | Conteos eficientes | `estimatedDocumentCount` para conteos sin filtro (O(1)) |
 | Cache | 6 horas para consultas frecuentes (stores, configs, conteos) |
 | Write ops bloqueados | Operadores de modificacion ($set, $unset, $inc, etc.) rechazados |
+| Rango fechas | Maximo 6 meses en reportes API (183 dias) |
+| Reportes via API | Los 10 tools de API son la unica via para reportes, no query_mongodb |
 
 ## Cache en memoria
 
@@ -79,18 +81,21 @@ Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
 
 Muestra entradas activas y tamaño del cache.
 
-## Tools disponibles (18)
+## Tools disponibles (19)
+
+### Guia de reportes (1)
+- `available_reports` — catalogo de reportes disponibles con ejemplos de uso
 
 ### MongoDB (7)
 - `list_collections` — listar todas las colecciones con conteo estimado
-- `query_mongodb` — find, count, distinct, aggregate sobre cualquier coleccion (solo lectura)
+- `query_mongodb` — find, count, distinct, aggregate sobre cualquier coleccion (solo lectura, NO para reportes)
 - `get_collection_schema` — ver estructura/campos de una coleccion
 - `search_stores` — buscar comercios por nombre (disambiguation) **[cacheado]**
 - `get_store_config` — config de metodos de pago, POS, delivery **[cacheado]**
 - `get_payment_errors` — errores de pago por metodo
 - `get_payment_summary` — resumen de aprobacion/rechazo por metodo
 
-### API Wibo (10)
+### API Wibo — Reportes (10) — rango maximo 6 meses
 - `get_commercial_comparison`, `get_commercial_risk`, `get_transactions_daily`
 - `get_transactions_totals`, `get_low_transactions`, `get_features_usage`
 - `get_payments_rejected`, `get_payments_methods`, `get_system_pos_errors`

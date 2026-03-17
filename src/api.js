@@ -8,14 +8,16 @@ export const storeNameParam = z.string().describe(
   "Nombre del comercio, organización o sitio. Ej: 'Kiosko Chacay Centro', 'Pollo Bravo'. Si no estás seguro del nombre exacto, usa search_stores primero."
 );
 
+const MAX_RANGE_DAYS = 183; // ~6 meses
+
 export const commonParams = {
   storeName: storeNameParam,
-  period: z.enum(["day", "week", "month", "6months", "year"]).optional()
-    .describe("Período predefinido: day, week, month, 6months, year. Default: month"),
+  period: z.enum(["day", "week", "month", "6months"]).optional()
+    .describe("Período predefinido: day, week, month, 6months. Default: month"),
   startDate: z.string().optional()
-    .describe("Fecha inicio YYYY-MM-DD. Tiene prioridad sobre period"),
+    .describe("Fecha inicio YYYY-MM-DD. Tiene prioridad sobre period. Rango máximo: 6 meses"),
   endDate: z.string().optional()
-    .describe("Fecha fin YYYY-MM-DD. Tiene prioridad sobre period"),
+    .describe("Fecha fin YYYY-MM-DD. Tiene prioridad sobre period. Rango máximo: 6 meses"),
 };
 
 export async function wiboFetch(path, params = {}) {
@@ -38,6 +40,22 @@ export async function wiboFetch(path, params = {}) {
 }
 
 export async function callWiboWithStore(path, storeName, extraParams = {}) {
+  const { startDate, endDate } = extraParams;
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) {
+      throw new Error("startDate debe ser anterior a endDate.");
+    }
+    if (diffDays > MAX_RANGE_DAYS) {
+      throw new Error(
+        `Rango máximo permitido: 6 meses (${MAX_RANGE_DAYS} días). ` +
+        `Rango solicitado: ${Math.round(diffDays)} días. ` +
+        "Ejemplo válido: startDate='2026-01-01', endDate='2026-06-30'."
+      );
+    }
+  }
   const { organizationId, storeId } = await resolveOrThrow(storeName);
   const data = await wiboFetch(path, { organizationId, storeId, ...extraParams });
   return ok(data);

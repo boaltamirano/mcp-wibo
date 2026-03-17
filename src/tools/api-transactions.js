@@ -3,21 +3,27 @@ import { commonParams, callWiboWithStore } from "../api.js";
 
 export function register(server) {
   server.tool("get_transactions_daily",
-    "Transacciones diarias por tienda con métricas y promedios. Para: actividad diaria, ventas diarias.",
+    "REPORTE: Transacciones diarias por tienda con métricas y promedios. " +
+    "Para: actividad diaria, ventas diarias. " +
+    "Usa este tool en vez de query_mongodb para datos diarios.",
     { ...commonParams },
     async ({ storeName, period, startDate, endDate }) =>
       callWiboWithStore("/transactions/daily", storeName, { period, startDate, endDate })
   );
 
   server.tool("get_transactions_totals",
-    "Totales agregados de toda la plataforma. Para: resumen global, KPIs totales.",
+    "REPORTE: Totales agregados: transacciones exitosas, ventas totales, usuarios. " +
+    "Para: resumen global, KPIs totales, cuántas órdenes hubo. " +
+    "Usa este tool en vez de query_mongodb para totales de ventas.",
     { ...commonParams },
     async ({ storeName, period, startDate, endDate }) =>
       callWiboWithStore("/transactions/totals", storeName, { period, startDate, endDate })
   );
 
   server.tool("get_low_transactions",
-    "Tiendas con transacciones semanales bajo umbral mínimo. Para: bajo rendimiento, alertas.",
+    "REPORTE: Tiendas con transacciones semanales bajo umbral mínimo. " +
+    "Para: bajo rendimiento, alertas de actividad. " +
+    "Usa este tool en vez de query_mongodb para alertas de transacciones.",
     { ...commonParams,
       threshold: z.number().optional().describe("Umbral mínimo semanal. Default: 140"),
     },

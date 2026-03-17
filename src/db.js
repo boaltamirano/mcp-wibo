@@ -19,7 +19,7 @@ export async function getDb() {
 
 export async function closeDb() {
   if (mongoClient) {
-    await mongoClient.close().catch(() => {});
+    await mongoClient.close().catch(() => { });
     mongoClient = null;
     db = null;
   }

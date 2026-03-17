@@ -3,4 +3,3 @@ node_modules/
 .DS_Store
 .claude/
 claude_desktop_config.json
-prompts.html

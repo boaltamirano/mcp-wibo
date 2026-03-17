@@ -32,12 +32,10 @@ export function register(server) {
   // ── query_mongodb ─────────────────────────────────────────
   server.tool(
     "query_mongodb",
-    "Ejecuta consultas de SOLO LECTURA en cualquier colección de MongoDB. " +
-    "Soporta find, count, distinct y aggregate. " +
-    "IMPORTANTE para colecciones grandes (orders tiene 2.5M+ docs): " +
-    "- Para contar sin filtro usa operation=count con filter vacío (usa estimado internamente). " +
-    "- Siempre filtra por campos indexados (store_id, organization_id, created_at, status). " +
-    "- En aggregates, pon $match PRIMERO para usar índices.",
+    "Consultas de SOLO LECTURA en MongoDB. Soporta find, count, distinct, aggregate. " +
+    "NO usar para reportes de ventas, transacciones, pagos o features — usa los tools de REPORTE (get_commercial_*, get_transactions_*, get_payments_*, get_features_*, get_user_experience, get_system_pos_errors). " +
+    "Si te piden un reporte, consulta available_reports primero. " +
+    "Para colecciones grandes (orders 2.5M+ docs): filtra por campos indexados (store_id, organization_id, created_at, status).",
     {
       collection: z.string().describe(
         "Nombre de la colección: stores, orders, organizations, users, products, payments, sites, wallets, coupons, etc."

@@ -72,12 +72,12 @@ New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\src\tools" | Out-Null
 Invoke-WebRequest -Uri "$RAW_URL/index.js" -OutFile "$INSTALL_DIR\index.js" -UseBasicParsing
 Invoke-WebRequest -Uri "$RAW_URL/package.json" -OutFile "$INSTALL_DIR\package.json" -UseBasicParsing
 
-$srcFiles = @("config.js", "cache.js", "db.js", "auth.js", "store-resolver.js", "api.js", "server.js")
+$srcFiles = @("config.js", "cache.js", "db.js", "store-resolver.js", "api.js", "server.js")
 foreach ($f in $srcFiles) {
     Invoke-WebRequest -Uri "$RAW_URL/src/$f" -OutFile "$INSTALL_DIR\src\$f" -UseBasicParsing
 }
 
-$toolFiles = @("admin.js", "stores.js", "payments.js", "api-commercial.js", "api-transactions.js", "api-payments.js", "api-features.js", "cache-stats.js")
+$toolFiles = @("admin.js", "stores.js", "payments.js", "api-commercial.js", "api-transactions.js", "api-payments.js", "api-features.js", "cache-stats.js", "report-guide.js")
 foreach ($f in $toolFiles) {
     Invoke-WebRequest -Uri "$RAW_URL/src/tools/$f" -OutFile "$INSTALL_DIR\src\tools\$f" -UseBasicParsing
 }

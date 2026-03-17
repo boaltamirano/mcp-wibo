@@ -98,11 +98,11 @@ mkdir -p "$INSTALL_DIR/src/tools"
 curl -fsSL "$RAW_URL/index.js" -o "$INSTALL_DIR/index.js"
 curl -fsSL "$RAW_URL/package.json" -o "$INSTALL_DIR/package.json"
 
-for f in config.js cache.js db.js auth.js store-resolver.js api.js server.js; do
+for f in config.js cache.js db.js store-resolver.js api.js server.js; do
   curl -fsSL "$RAW_URL/src/$f" -o "$INSTALL_DIR/src/$f"
 done
 
-for f in admin.js stores.js payments.js api-commercial.js api-transactions.js api-payments.js api-features.js cache-stats.js; do
+for f in admin.js stores.js payments.js api-commercial.js api-transactions.js api-payments.js api-features.js cache-stats.js report-guide.js; do
   curl -fsSL "$RAW_URL/src/tools/$f" -o "$INSTALL_DIR/src/tools/$f"
 done
 
@@ -129,24 +129,28 @@ echo -e "${YELLOW}→${NC} Configurando Claude Desktop..."
 
 mkdir -p "$CLAUDE_CONFIG_DIR"
 
-# Usar node para hacer merge seguro del JSON
+# Usar node para hacer merge seguro del JSON (env vars via process.env)
+WIBO_API_KEY="$WIBO_API_KEY" \
+MONGODB_URL="$MONGODB_URL" \
+MONGODB_DATABASE="$MONGODB_DATABASE" \
+MCP_INSTALL_DIR="$INSTALL_DIR" \
 node -e "
   const fs = require('fs');
-  const configPath = '$CLAUDE_CONFIG';
+  const configPath = process.argv[1];
   let config = {};
   try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch {}
   if (!config.mcpServers) config.mcpServers = {};
   config.mcpServers['wibo-reports'] = {
     command: 'node',
-    args: ['$INSTALL_DIR/index.js'],
+    args: [process.env.MCP_INSTALL_DIR + '/index.js'],
     env: {
-      WIBO_API_KEY: $(node -e "process.stdout.write(JSON.stringify('$WIBO_API_KEY'))"),
-      MONGODB_URL: $(node -e "process.stdout.write(JSON.stringify('$MONGODB_URL'))"),
-      MONGODB_DATABASE: $(node -e "process.stdout.write(JSON.stringify('$MONGODB_DATABASE'))")
+      WIBO_API_KEY: process.env.WIBO_API_KEY,
+      MONGODB_URL: process.env.MONGODB_URL,
+      MONGODB_DATABASE: process.env.MONGODB_DATABASE
     }
   };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-"
+" "$CLAUDE_CONFIG"
 echo -e "${GREEN}✓${NC} Claude Desktop configurado"
 
 # ─── 7. Listo ────────────────────────────────────────────────

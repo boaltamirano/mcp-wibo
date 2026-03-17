@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wibo MCP v5.0 — Guía de Prompts</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --accent3: #ff6b6b;
+      --accent4: #ffd93d;
+      --accent5: #4ecdc4;
+      --accent6: #a855f7;
+      --text: #e4e4e7;
+      --text-dim: #9ca3af;
+      --success: #22c55e;
+      --warning: #f59e0b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding: 2rem 0;
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.7rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin: 0.2rem;
+    }
+    .badge-mongo { background: #1a4731; color: #22c55e; }
+    .badge-api { background: #1e1a47; color: #6c63ff; }
+
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent2);
+    }
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .section-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .section-title .icon {
+      font-size: 1.4rem;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.6rem;
+    }
+
+    .card-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent2);
+    }
+
+    .card-desc {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 0.8rem;
+    }
+
+    .prompt-block {
+      background: #111318;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.88rem;
+      cursor: pointer;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+    .prompt-block:hover {
+      border-color: var(--accent);
+    }
+    .prompt-block::after {
+      content: '📋';
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      font-size: 0.75rem;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .prompt-block:hover::after {
+      opacity: 1;
+    }
+
+    .prompt-block.copied {
+      border-color: var(--success);
+    }
+    .prompt-block.copied::after {
+      content: '✓';
+      opacity: 1;
+      color: var(--success);
+    }
+
+    .prompt-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 0.3rem;
+    }
+
+    .tip-box {
+      background: #1a2332;
+      border: 1px solid #2563eb33;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin: 1.5rem 0;
+      font-size: 0.88rem;
+    }
+    .tip-box strong {
+      color: #60a5fa;
+    }
+
+    .combined-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .combined-title {
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+      color: var(--accent);
+    }
+
+    .combined-desc {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 1rem;
+    }
+
+    .workflow-step {
+      display: flex;
+      gap: 0.8rem;
+      margin-bottom: 0.5rem;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      min-width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0 1rem;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+    }
+
+    @media (max-width: 700px) {
+      body { padding: 1rem; }
+      .card-grid { grid-template-columns: 1fr; }
+      header h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header>
+      <h1>Wibo MCP v5.0</h1>
+      <p>Guía de prompts para Claude Desktop</p>
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="stat-number">17</div>
+          <div class="stat-label">Herramientas</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">7</div>
+          <div class="stat-label">MongoDB</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">10</div>
+          <div class="stat-label">API Wibo</div>
+        </div>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-dim);">Haz clic en cualquier prompt para copiarlo</p>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  TIP: BUSQUEDA POR NOMBRE                             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="tip-box">
+      <strong>💡 Tip:</strong> Ya no necesitas IDs técnicos. Solo escribe el nombre del comercio, organización o sitio y Claude lo resuelve automáticamente. Si hay varios con el mismo nombre, te preguntará cuál.
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: BUSQUEDA Y EXPLORACION                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">🔍</span> Búsqueda y exploración
+      <span class="badge badge-mongo">MongoDB</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- search_stores -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">search_stores</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Busca por nombre de comercio, organización o sitio. Punto de partida para cualquier consulta.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué comercios hay disponibles?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Busca comercios que se llamen "Pollo"</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué sitios tiene la organización Kiosko Chacay?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Lista todos los comercios activos</div>
+      </div>
+
+      <!-- list_collections -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">list_collections</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Lista todas las colecciones con conteo estimado de documentos.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué colecciones hay en la base de datos?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántos registros tiene cada colección?</div>
+      </div>
+
+      <!-- get_collection_schema -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_collection_schema</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Muestra la estructura de campos de una colección.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué campos tiene la colección orders?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Muéstrame la estructura de la colección stores</div>
+      </div>
+
+      <!-- query_mongodb -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">query_mongodb</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Consultas genéricas: find, count, distinct y aggregate sobre cualquier colección.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántas órdenes hay en total?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántos usuarios activos hay?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué valores distintos hay en el campo status de orders?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Muéstrame las últimas 10 órdenes creadas</div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: CONFIGURACION DE COMERCIOS                  -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">⚙️</span> Configuración
+      <span class="badge badge-mongo">MongoDB</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- get_store_config -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_store_config</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Métodos de pago, integraciones POS, delivery y features. Busca por nombre de comercio, organización o sitio.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué métodos de pago tiene habilitados Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué POS usa Kiosko Chacay Centro?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Muéstrame la configuración del sitio Sushi Express Mall</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué métodos de entrega tiene la organización Pollo Bravo?</div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: ERRORES Y PAGOS                             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">💳</span> Errores y pagos
+      <span class="badge badge-mongo">MongoDB</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- get_payment_errors -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_payment_errors</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Errores de pago de cualquier método: getnet, transbank, fpay, mercadopago, klap, niubiz, etc.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué errores de pago ha tenido Pollo Bravo en los últimos 3 meses?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Muéstrame los errores de Getnet en Kiosko Chacay Centro</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Errores de Transbank del último mes en Sushi Express</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuáles son los errores de pago más frecuentes en Pollo Bravo?</div>
+      </div>
+
+      <!-- get_payment_summary -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_payment_summary</span>
+          <span class="badge badge-mongo">MongoDB</span>
+        </div>
+        <div class="card-desc">Resumen de aprobación/rechazo por método de pago, tasa de éxito.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuál es la tasa de aprobación de pagos en Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Resumen de pagos aprobados vs rechazados de Kiosko Chacay Centro</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué método de pago tiene más rechazos en Sushi Express?</div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: VENTAS Y TRANSACCIONES (API)                -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">📊</span> Ventas y transacciones
+      <span class="badge badge-api">API Wibo</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- get_commercial_comparison -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_commercial_comparison</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Compara ventas del período actual vs anterior a nivel organización. Opcionalmente filtra por tienda.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cómo le fue a la organización Pollo Bravo este mes comparado con el anterior?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Compara las ventas de esta semana vs la anterior en Kiosko Chacay Centro</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Creció o cayó Sushi Express en los últimos 6 meses?</div>
+      </div>
+
+      <!-- get_transactions_daily -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_transactions_daily</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Transacciones diarias con métricas y promedios. A nivel organización o filtrado por tienda/sitio.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántas transacciones diarias tuvo la organización Pollo Bravo esta semana?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Muéstrame las ventas diarias del sitio Kiosko Chacay Centro del último mes</div>
+      </div>
+
+      <!-- get_transactions_totals -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_transactions_totals</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Totales agregados a nivel organización: KPIs globales de todas sus tiendas.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuáles son los totales de Pollo Bravo este mes?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Resumen global de ventas de la organización Kiosko Chacay la última semana</div>
+      </div>
+
+      <!-- get_payments_methods -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_payments_methods</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Estadísticas por método de pago a nivel organización: aprobación, rechazo, errores técnicos.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué método de pago se usa más en la organización Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Estadísticas de métodos de pago de Kiosko Chacay este mes</div>
+      </div>
+
+      <!-- get_payments_rejected -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_payments_rejected</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Pagos rechazados a nivel organización o tienda: desglose por motivo y método.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Por qué se están rechazando pagos en la organización Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Desglose de pagos rechazados del sitio Sushi Express Mall esta semana</div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: ALERTAS Y RIESGOS                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">⚠️</span> Alertas y riesgos
+      <span class="badge badge-api">API Wibo</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- get_commercial_risk -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_commercial_risk</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Detecta tiendas en riesgo dentro de una organización: caída de ventas, inactividad.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué tiendas de Pollo Bravo tienen alertas de riesgo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Hay tiendas de Kiosko Chacay que hayan caído más del 50% en ventas?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué sitios de la organización llevan más de 3 días sin ventas?</div>
+      </div>
+
+      <!-- get_low_transactions -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_low_transactions</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Tiendas de una organización con transacciones semanales bajo umbral mínimo.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué tiendas de Pollo Bravo tienen bajo volumen de transacciones?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuáles sitios de Kiosko Chacay tienen menos de 100 transacciones por semana?</div>
+      </div>
+
+      <!-- get_system_pos_errors -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_system_pos_errors</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Errores del sistema POS a nivel organización o tienda: fudo, mrc, justo, nutriserv.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué errores de POS tiene la organización Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Hay fallas de Fudo en algún sitio de Kiosko Chacay esta semana?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Errores de POS del último mes en el sitio Kiosko Chacay Centro</div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: FEATURES Y UX                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">✨</span> Features y experiencia de usuario
+      <span class="badge badge-api">API Wibo</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- get_features_usage -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_features_usage</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Adopción de funcionalidades a nivel organización: cupones, wallet, beneficiarios, promociones.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Qué features están usando en la organización Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántos cupones se han redimido en Kiosko Chacay este mes?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Se usa mucho la wallet en el sitio Sushi Express Mall?</div>
+      </div>
+
+      <!-- get_user_experience -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">get_user_experience</span>
+          <span class="badge badge-api">API</span>
+        </div>
+        <div class="card-desc">Métricas de UX a nivel organización o tienda: abandono, reintentos, completitud del flujo de compra.</div>
+        <div class="prompt-label">Prompts ejemplo</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuál es la tasa de abandono en la organización Pollo Bravo?</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">Métricas de experiencia de usuario en el sitio Kiosko Chacay Centro</div>
+        <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántos reintentos de compra hay en Sushi Express?</div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: CONSULTAS COMBINADAS                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">🚀</span> Consultas avanzadas (combinan múltiples herramientas)
+    </div>
+
+    <div class="combined-section">
+      <div class="combined-title">Diagnóstico completo</div>
+      <div class="combined-desc">Claude usará varias herramientas automáticamente para darte un panorama completo. Puedes indicar comercio, organización o sitio.</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">Hazme un diagnóstico completo de Pollo Bravo: ventas, errores de pago, configuración y alertas de riesgo</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">Diagnóstico de la organización Kiosko Chacay: todos sus sitios, configuración y errores</div>
+    </div>
+
+    <div class="combined-section">
+      <div class="combined-title">Análisis de salud de pagos</div>
+      <div class="combined-desc">Combina errores de pago, tasa de aprobación y métodos rechazados.</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">Analiza la salud de pagos de Kiosko Chacay Centro: errores frecuentes, tasa de aprobación por método y pagos rechazados</div>
+    </div>
+
+    <div class="combined-section">
+      <div class="combined-title">Reporte semanal ejecutivo</div>
+      <div class="combined-desc">Vista gerencial con comparativas, riesgos y métricas clave.</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">Genera un reporte semanal ejecutivo de la organización Pollo Bravo: comparativa de ventas vs semana anterior, tiendas en riesgo, errores de POS y tasa de aprobación de pagos</div>
+    </div>
+
+    <div class="combined-section">
+      <div class="combined-title">Comparativa entre comercios</div>
+      <div class="combined-desc">Compara métricas de dos o más comercios.</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">Compara las ventas, errores de pago y adopción de features entre Pollo Bravo y Sushi Express este mes</div>
+    </div>
+
+    <div class="combined-section">
+      <div class="combined-title">Exploración de datos abierta</div>
+      <div class="combined-desc">Consulta directa a MongoDB para preguntas que no cubren las herramientas especializadas.</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">¿Cuántas órdenes con cupón se han hecho en los últimos 7 días? Muéstrame por comercio</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">¿Cuáles son los productos más vendidos en Pollo Bravo?</div>
+      <div class="prompt-block" onclick="copyPrompt(this)">¿Qué comercios tienen wallet habilitada y cuántas transacciones con wallet han tenido?</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECCION: TIPS                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <div class="section-title">
+      <span class="icon">📝</span> Tips para mejores resultados
+    </div>
+
+    <div class="tip-box">
+      <strong>Búsqueda por nombre:</strong> Puedes buscar por nombre de comercio, organización o sitio. No necesitas el nombre exacto. Si dices "Kiosko", Claude buscará todos los que coincidan y te preguntará cuál si hay varios.
+    </div>
+    <div class="tip-box">
+      <strong>Períodos de tiempo:</strong> Puedes usar lenguaje natural: "esta semana", "el último mes", "los últimos 6 meses", "del 1 al 15 de enero".
+    </div>
+    <div class="tip-box">
+      <strong>Métodos de pago:</strong> Soporta todos: getnet, transbank, fpay, mercadopago, klap, niubiz, cash, wallet, y más.
+    </div>
+    <div class="tip-box">
+      <strong>Nivel de consulta:</strong> Los reportes de la API funcionan a nivel <strong>organización</strong> (todas sus tiendas) y opcionalmente puedes filtrar por una tienda o sitio específico.
+    </div>
+    <div class="tip-box">
+      <strong>Consultas abiertas:</strong> Para datos que no cubren las herramientas especializadas, Claude puede hacer consultas directas a MongoDB usando <code>query_mongodb</code>.
+    </div>
+
+    <footer>
+      Wibo MCP v5.0 — 17 herramientas (7 MongoDB + 10 API) — Optimizado para producción (2.5M+ docs)
+    </footer>
+
+  </div>
+
+  <script>
+    function copyPrompt(el) {
+      const text = el.textContent.trim();
+      navigator.clipboard.writeText(text).then(() => {
+        el.classList.add('copied');
+        setTimeout(() => el.classList.remove('copied'), 1500);
+      });
+    }
+  </script>
+</body>
+</html>
