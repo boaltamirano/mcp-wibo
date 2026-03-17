@@ -5,7 +5,10 @@ import { resolveOrThrow } from "./store-resolver.js";
 export const ok = (data) => ({ content: [{ type: "text", text: JSON.stringify(data, null, 2) }] });
 
 export const storeNameParam = z.string().describe(
-  "Nombre del comercio, organización o sitio. Ej: 'Kiosko Chacay Centro', 'Pollo Bravo'. Si no estás seguro del nombre exacto, usa search_stores primero."
+  "Nombre EXACTO del comercio dentro de una organización ya identificada. " +
+  "ANTES de usar este parámetro, confirma a qué organización pertenece. " +
+  "Si el usuario no especificó organización, usa list_organizations primero. " +
+  "Ej: 'Kiosko Chacay Centro', 'Pollo Bravo'. Si no estás seguro del nombre exacto, usa search_stores."
 );
 
 const MAX_RANGE_DAYS = 183; // ~6 meses

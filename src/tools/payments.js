@@ -8,6 +8,7 @@ export function register(server) {
   // ── get_payment_errors ────────────────────────────────────
   server.tool(
     "get_payment_errors",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "Analiza errores de pago de cualquier método (getnet, transbank, fpay, mercadopago, klap, niubiz, etc). " +
     "Agrupa errores por código y mensaje, muestra frecuencia y porcentaje.",
     {
@@ -80,6 +81,7 @@ export function register(server) {
   // ── get_payment_summary ───────────────────────────────────
   server.tool(
     "get_payment_summary",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "Resumen de pagos por método: total de órdenes, aprobadas, rechazadas y tasa de éxito por cada método de pago.",
     {
       storeName: storeNameParam,

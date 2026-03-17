@@ -3,6 +3,7 @@ import { commonParams, callWiboWithStore } from "../api.js";
 
 export function register(server) {
   server.tool("get_transactions_daily",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Transacciones diarias por tienda con métricas y promedios. " +
     "Para: actividad diaria, ventas diarias. " +
     "Usa este tool en vez de query_mongodb para datos diarios.",
@@ -12,6 +13,7 @@ export function register(server) {
   );
 
   server.tool("get_transactions_totals",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Totales agregados: transacciones exitosas, ventas totales, usuarios. " +
     "Para: resumen global, KPIs totales, cuántas órdenes hubo. " +
     "Usa este tool en vez de query_mongodb para totales de ventas.",
@@ -21,6 +23,7 @@ export function register(server) {
   );
 
   server.tool("get_low_transactions",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Tiendas con transacciones semanales bajo umbral mínimo. " +
     "Para: bajo rendimiento, alertas de actividad. " +
     "Usa este tool en vez de query_mongodb para alertas de transacciones.",

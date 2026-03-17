@@ -9,6 +9,16 @@ export function register(server) {
     "El rango máximo de fechas es 6 meses.",
     {},
     async () => ok({
+      flujoObligatorio: {
+        descripcion: "SIEMPRE sigue estos pasos en orden antes de ejecutar cualquier reporte.",
+        pasos: [
+          "PASO 1: Si el usuario NO especificó una organización o comercio concreto, ejecuta list_organizations para mostrar las opciones y PREGUNTA cuál quiere.",
+          "PASO 2: Una vez identificada la organización, si hay múltiples comercios, pregunta cuál comercio específico quiere consultar (o si quiere ver todos uno por uno).",
+          "PASO 3: Solo cuando tengas el nombre EXACTO del comercio, ejecuta el tool de reporte correspondiente.",
+          "NUNCA ejecutes un reporte sin haber confirmado organización o comercio con el usuario.",
+          "NUNCA iteres sobre múltiples comercios sin autorización explícita del usuario.",
+        ],
+      },
       instrucciones: "Usa ÚNICAMENTE estos tools para generar reportes. NO uses query_mongodb para reportes. El rango máximo de fechas es 6 meses.",
       reportes: [
         {
@@ -82,7 +92,7 @@ export function register(server) {
           "Solo febrero: startDate='2026-02-01', endDate='2026-02-28'",
         ],
       },
-      nota: "Para buscar el nombre exacto de un comercio usa search_stores antes de pedir un reporte.",
+      nota: "Para ver todas las organizaciones usa list_organizations. Para buscar el nombre exacto de un comercio usa search_stores.",
     })
   );
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export function register(server) {
   server.tool("get_commercial_comparison",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Compara métricas de ventas entre el período actual y el anterior. " +
     "Para: desempeño, ventas, crecimiento, ranking. " +
     "Usa este tool en vez de query_mongodb para datos de ventas.",
@@ -12,6 +13,7 @@ export function register(server) {
   );
 
   server.tool("get_commercial_risk",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Detecta tiendas en riesgo: caída de ventas y tiendas sin actividad. " +
     "Para: alertas, riesgos, tiendas inactivas. " +
     "Usa este tool en vez de query_mongodb para alertas comerciales.",

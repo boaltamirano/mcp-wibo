@@ -68,6 +68,7 @@ Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
 | Resolución de store por nombre | `resolve:{nombre}` | 6h |
 | Búsqueda de stores | `stores:{query}:{limit}` | 6h |
 | Configuración de store | `config:{storeId}` | 6h |
+| Lista de organizaciones | `organizations:list` | 6h |
 | Conteo sin filtro (query_mongodb) | `count:{coleccion}` | 6h |
 
 ### Operaciones NO cacheadas
@@ -81,10 +82,19 @@ Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
 
 Muestra entradas activas y tamaño del cache.
 
-## Tools disponibles (19)
+## Flujo obligatorio para reportes
+
+1. Si el usuario no especifica organización o comercio → `list_organizations` y preguntar
+2. Si hay múltiples comercios en la organización → preguntar cuál
+3. Solo con comercio confirmado → ejecutar el tool de reporte
+
+## Tools disponibles (20)
 
 ### Guia de reportes (1)
-- `available_reports` — catalogo de reportes disponibles con ejemplos de uso
+- `available_reports` — catalogo de reportes disponibles con flujo obligatorio y ejemplos de uso
+
+### Organizaciones (1) — PASO PREVIO OBLIGATORIO
+- `list_organizations` — listar organizaciones con sus comercios activos **[cacheado 6h]**
 
 ### MongoDB (7)
 - `list_collections` — listar todas las colecciones con conteo estimado

@@ -2,6 +2,7 @@ import { commonParams, callWiboWithStore } from "../api.js";
 
 export function register(server) {
   server.tool("get_payments_rejected",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Transacciones rechazadas: desglose por motivo y método de pago. " +
     "Usa este tool en vez de query_mongodb para datos de rechazos.",
     { ...commonParams },
@@ -10,6 +11,7 @@ export function register(server) {
   );
 
   server.tool("get_payments_methods",
+    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
     "REPORTE: Estadísticas por método de pago: aprobación, rechazo, errores técnicos. " +
     "Usa este tool en vez de query_mongodb para datos de métodos de pago.",
     { ...commonParams },
