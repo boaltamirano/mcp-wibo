@@ -17,7 +17,7 @@ export async function resolveStore(storeName) {
       .toArray();
 
     if (stores.length === 0) {
-      return { found: false, message: `No se encontró ningún comercio con "${storeName}". Usa search_stores para ver opciones.` };
+      return { found: false, message: `No se encontró ningún comercio con "${storeName}". Pregunta al usuario el nombre exacto del comercio.` };
     }
     if (stores.length === 1) {
       return { found: true, store: stores[0] };
@@ -26,8 +26,7 @@ export async function resolveStore(storeName) {
     return {
       found: false,
       ambiguous: true,
-      message: `Se encontraron ${stores.length} comercios:\n${list}\nPor favor indica el nombre exacto del comercio.`,
-      stores,
+      message: `Se encontraron ${stores.length} comercios:\n${list}\nPregunta al usuario cuál es el comercio exacto.`,
     };
   });
 }

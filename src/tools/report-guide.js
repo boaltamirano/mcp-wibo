@@ -1,98 +1,49 @@
-import { ok } from "../api.js";
+import { getOrganizationList } from "../org-list.js";
 
 export function register(server) {
   server.tool(
     "available_reports",
-    "IMPORTANTE: Consulta este tool ANTES de generar cualquier reporte. " +
-    "Lista todos los reportes disponibles con ejemplos de uso. " +
-    "Los reportes SOLO se generan con los tools de API listados aquí, NUNCA con query_mongodb. " +
-    "El rango máximo de fechas es 6 meses.",
+    "Guía de reportes y lista de organizaciones. Ejecuta este tool cuando el usuario pida un reporte, análisis de ventas, transacciones o datos comerciales. " +
+    "Devuelve las organizaciones disponibles y el flujo correcto para generar reportes.",
     {},
-    async () => ok({
-      flujoObligatorio: {
-        descripcion: "SIEMPRE sigue estos pasos en orden antes de ejecutar cualquier reporte.",
-        pasos: [
-          "PASO 1: Si el usuario NO especificó una organización o comercio concreto, ejecuta list_organizations para mostrar las opciones y PREGUNTA cuál quiere.",
-          "PASO 2: Una vez identificada la organización, si hay múltiples comercios, pregunta cuál comercio específico quiere consultar (o si quiere ver todos uno por uno).",
-          "PASO 3: Solo cuando tengas el nombre EXACTO del comercio, ejecuta el tool de reporte correspondiente.",
-          "NUNCA ejecutes un reporte sin haber confirmado organización o comercio con el usuario.",
-          "NUNCA iteres sobre múltiples comercios sin autorización explícita del usuario.",
-        ],
-      },
-      instrucciones: "Usa ÚNICAMENTE estos tools para generar reportes. NO uses query_mongodb para reportes. El rango máximo de fechas es 6 meses.",
-      reportes: [
-        {
-          tool: "get_commercial_comparison",
-          descripcion: "Comparación de ventas entre período actual y anterior",
-          usosPara: "desempeño, ventas, crecimiento, ranking de tiendas",
-          ejemplo: 'get_commercial_comparison({ storeName: "Montaditos", period: "month" })',
-          ejemploFechas: 'get_commercial_comparison({ storeName: "Montaditos", startDate: "2026-01-01", endDate: "2026-03-31" })',
-        },
-        {
-          tool: "get_commercial_risk",
-          descripcion: "Tiendas en riesgo por caída de ventas o inactividad",
-          usosPara: "alertas, riesgos, tiendas inactivas, caídas de ventas",
-          ejemplo: 'get_commercial_risk({ storeName: "Montaditos", period: "month" })',
-        },
-        {
-          tool: "get_transactions_daily",
-          descripcion: "Transacciones diarias con métricas y promedios por tienda",
-          usosPara: "actividad diaria, ventas diarias, tendencias",
-          ejemplo: 'get_transactions_daily({ storeName: "Montaditos", period: "month" })',
-        },
-        {
-          tool: "get_transactions_totals",
-          descripcion: "Totales agregados: transacciones exitosas, ventas totales, usuarios",
-          usosPara: "resumen global, KPIs totales, cuántas órdenes hubo",
-          ejemplo: 'get_transactions_totals({ storeName: "Montaditos", startDate: "2026-02-01", endDate: "2026-02-28" })',
-        },
-        {
-          tool: "get_low_transactions",
-          descripcion: "Tiendas con transacciones bajo umbral mínimo semanal",
-          usosPara: "bajo rendimiento, alertas de actividad, tiendas flojas",
-          ejemplo: 'get_low_transactions({ storeName: "Montaditos", period: "month", threshold: 140 })',
-        },
-        {
-          tool: "get_payments_rejected",
-          descripcion: "Transacciones rechazadas por motivo y método de pago",
-          usosPara: "pagos rechazados, errores de pago, tasa de rechazo",
-          ejemplo: 'get_payments_rejected({ storeName: "Montaditos", period: "month" })',
-        },
-        {
-          tool: "get_payments_methods",
-          descripcion: "Estadísticas por método de pago: aprobación, rechazo, errores",
-          usosPara: "métodos de pago, tasas de éxito, comparar métodos",
-          ejemplo: 'get_payments_methods({ storeName: "Montaditos", period: "month" })',
-        },
-        {
-          tool: "get_features_usage",
-          descripcion: "Adopción de funcionalidades: cupones, wallet, beneficiarios, promociones",
-          usosPara: "uso de features, adopción, cupones, wallet",
-          ejemplo: 'get_features_usage({ storeName: "Montaditos", period: "month" })',
-        },
-        {
-          tool: "get_user_experience",
-          descripcion: "Métricas de UX: abandono, reintentos, completitud del flujo de compra",
-          usosPara: "experiencia de usuario, abandono, conversión",
-          ejemplo: 'get_user_experience({ storeName: "Montaditos", period: "month" })',
-        },
-        {
-          tool: "get_system_pos_errors",
-          descripcion: "Errores del sistema POS agrupados por sistema y tipo",
-          usosPara: "fallas POS, errores de fudo, mrc, justo, nutriserv",
-          ejemplo: 'get_system_pos_errors({ storeName: "Montaditos", period: "month" })',
-        },
-      ],
-      periodos: {
-        predefinidos: ["day", "week", "month", "6months"],
-        personalizados: "Usa startDate y endDate en formato YYYY-MM-DD (máximo 6 meses de rango)",
-        ejemplos: [
-          "Enero a Junio: startDate='2026-01-01', endDate='2026-06-30'",
-          "Febrero a Julio: startDate='2026-02-01', endDate='2026-07-31'",
-          "Solo febrero: startDate='2026-02-01', endDate='2026-02-28'",
-        ],
-      },
-      nota: "Para ver todas las organizaciones usa list_organizations. Para buscar el nombre exacto de un comercio usa search_stores.",
-    })
+    async () => {
+      const orgList = await getOrganizationList();
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            organizacionesDisponibles: orgList,
+            instruccion: "Muestra la lista de organizaciones al usuario y pregunta: '¿De cuál organización quieres el reporte?' Espera su respuesta antes de continuar.",
+            flujo: {
+              resumen: "Todo reporte necesita 1 organización + 1 comercio.",
+              pasos: [
+                "1. Muestra las organizaciones de arriba y pregunta cuál quiere el usuario. Espera respuesta.",
+                "2. Con la organización elegida, usa search_stores para ver sus comercios. Pregunta cuál. Espera respuesta.",
+                "3. Con organización y comercio confirmados, ejecuta el tool de reporte.",
+              ],
+              reglas: [
+                "Si el usuario ya mencionó un comercio específico (ej: 'Pollo Bravo'), ve directo al paso 3.",
+                "Si pide 'todos', responde: 'Los reportes se generan por organización y comercio. ¿Cuál quieres consultar?'",
+                "Un reporte = una organización + un comercio. No iteres sobre múltiples.",
+              ],
+            },
+            reportes: [
+              { tool: "get_commercial_comparison", para: "ventas, crecimiento, ranking" },
+              { tool: "get_commercial_risk", para: "alertas, riesgos, tiendas inactivas" },
+              { tool: "get_transactions_daily", para: "actividad diaria, tendencias" },
+              { tool: "get_transactions_totals", para: "KPIs totales, resumen global" },
+              { tool: "get_low_transactions", para: "bajo rendimiento, alertas" },
+              { tool: "get_payments_rejected", para: "pagos rechazados, errores" },
+              { tool: "get_payments_methods", para: "métodos de pago, tasas" },
+              { tool: "get_features_usage", para: "cupones, wallet, promociones" },
+              { tool: "get_user_experience", para: "abandono, conversión, UX" },
+              { tool: "get_system_pos_errors", para: "errores POS, fallas" },
+            ],
+            periodos: ["day", "week", "month", "6months", "o startDate/endDate YYYY-MM-DD (máx 6 meses)"],
+          }, null, 2),
+        }],
+      };
+    }
   );
 }

@@ -32,10 +32,10 @@ export function register(server) {
   // ── query_mongodb ─────────────────────────────────────────
   server.tool(
     "query_mongodb",
-    "Consultas de SOLO LECTURA en MongoDB. Soporta find, count, distinct, aggregate. " +
-    "NO usar para reportes de ventas, transacciones, pagos o features — usa los tools de REPORTE (get_commercial_*, get_transactions_*, get_payments_*, get_features_*, get_user_experience, get_system_pos_errors). " +
-    "Si te piden un reporte, consulta available_reports primero. " +
-    "Para colecciones grandes (orders 2.5M+ docs): filtra por campos indexados (store_id, organization_id, created_at, status).",
+    "Consultas de solo lectura en MongoDB (find, count, distinct, aggregate). " +
+    "Para datos de ventas, transacciones o pagos usa los tools de reporte (get_commercial_*, get_transactions_*, etc.) en su lugar. " +
+    "Las colecciones orders, payments, stores y organizations necesitan filtro por store_id, organization_id o _id. " +
+    "Si no tienes estos IDs, pregunta al usuario de qué organización o comercio necesita la información.",
     {
       collection: z.string().describe(
         "Nombre de la colección: stores, orders, organizations, users, products, payments, sites, wallets, coupons, etc."
@@ -67,6 +67,24 @@ export function register(server) {
       const col = database.collection(collection);
       const parsedFilter = filter ? JSON.parse(filter) : {};
       const isEmptyFilter = Object.keys(parsedFilter).length === 0;
+
+      // Bloquear colecciones sensibles sin filtro de store_id/organization_id
+      const RESTRICTED_COLLECTIONS = ["orders", "payments", "stores", "organizations"];
+      if (RESTRICTED_COLLECTIONS.includes(collection)) {
+        const hasStoreId = "store_id" in parsedFilter;
+        const hasOrgId = "organization_id" in parsedFilter;
+        const hasId = "_id" in parsedFilter;
+        const pipelineStr = pipeline || "";
+        const pipelineHasScope = /"store_id"/.test(pipelineStr) || /"organization_id"/.test(pipelineStr) || /"_id"/.test(pipelineStr);
+        const hasScope = hasStoreId || hasOrgId || hasId || pipelineHasScope;
+        if (!hasScope && operation !== "count") {
+          throw new Error(
+            `Para consultar "${collection}", necesitas especificar a qué comercio u organización te refieres. ` +
+            `Pregunta al usuario: "¿De qué organización o comercio necesitas esta información?" ` +
+            `Luego usa el filtro store_id, organization_id o _id.`
+          );
+        }
+      }
 
       // Bloquear operadores de modificación en filtros
       const filterStr = JSON.stringify(parsedFilter);

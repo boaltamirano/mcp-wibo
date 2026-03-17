@@ -1,14 +1,13 @@
 import { getDb } from "../db.js";
 import { cached } from "../cache.js";
-import { ok } from "../api.js";
 import { QUERY_TIMEOUT_MS } from "../config.js";
 
 export function register(server) {
   server.tool(
     "list_organizations",
-    "PASO 1 OBLIGATORIO: Lista todas las organizaciones disponibles con sus comercios activos. " +
-    "SIEMPRE ejecuta este tool ANTES de cualquier reporte si el usuario no especificó una organización. " +
-    "Devuelve nombre, cantidad de comercios activos y lista de nombres de comercios por organización.",
+    "Muestra las organizaciones disponibles con sus comercios activos. " +
+    "Usa este tool cuando el usuario quiere un reporte pero no ha dicho de qué organización o comercio. " +
+    "Después de mostrar la lista, pregunta: '¿De cuál organización quieres el reporte?' y espera la respuesta.",
     {},
     async () => {
       const result = await cached("organizations:list", async () => {
@@ -25,40 +24,40 @@ export function register(server) {
                   $match: {
                     $expr: { $eq: ["$organization_id", "$$orgId"] },
                     is_deleted: { $ne: true },
+                    is_enabled: true,
                   },
                 },
-                { $project: { name: 1, is_enabled: 1 } },
+                { $project: { _id: 0, name: 1 } },
               ],
               as: "stores",
             },
           },
+          { $match: { "stores.0": { $exists: true } } },
           {
             $project: {
+              _id: 0,
               organizationName: "$name",
-              totalStores: { $size: "$stores" },
-              activeStores: {
-                $size: {
-                  $filter: {
-                    input: "$stores",
-                    as: "s",
-                    cond: { $eq: ["$$s.is_enabled", true] },
-                  },
-                },
-              },
-              storeNames: "$stores.name",
+              activeStores: { $size: "$stores" },
             },
           },
           { $sort: { organizationName: 1 } },
         ], { maxTimeMS: QUERY_TIMEOUT_MS, allowDiskUse: false }).toArray();
 
-        return {
-          instruccion: "Presenta estas organizaciones al usuario y pregunta cuál quiere consultar. Luego pregunta qué comercio específico dentro de esa organización.",
-          total: orgs.length,
-          organizations: orgs,
-        };
+        // Devolver como texto plano para que Claude lo muestre, no como datos iterables
+        const lines = orgs.map((o, i) => `${i + 1}. ${o.organizationName} (${o.activeStores} comercios)`);
+
+        return lines.join("\n");
       });
 
-      return ok(result);
+      return {
+        content: [{
+          type: "text",
+          text: "INSTRUCCIÓN: Muestra la siguiente lista al usuario y pregunta: '¿De cuál organización quieres el reporte?'\n" +
+            "Los reportes SOLO se generan para UNA organización a la vez. NO iteres sobre la lista. ESPERA la respuesta del usuario.\n" +
+            "Si el usuario pide 'todos' o 'todas', responde: 'Los reportes se generan por organización. ¿Cuál quieres consultar?'\n\n" +
+            "ORGANIZACIONES DISPONIBLES:\n" + result,
+        }],
+      };
     }
   );
 }

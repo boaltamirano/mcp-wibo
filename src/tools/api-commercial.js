@@ -3,20 +3,18 @@ import { z } from "zod";
 
 export function register(server) {
   server.tool("get_commercial_comparison",
-    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
-    "REPORTE: Compara métricas de ventas entre el período actual y el anterior. " +
+    "Compara métricas de ventas entre el período actual y el anterior. " +
     "Para: desempeño, ventas, crecimiento, ranking. " +
-    "Usa este tool en vez de query_mongodb para datos de ventas.",
+    "storeName es OBLIGATORIO. Si el usuario no dijo qué comercio, PREGÚNTALE antes de llamar este tool.",
     { ...commonParams },
     async ({ storeName, period, startDate, endDate }) =>
       callWiboWithStore("/commercial/comparison", storeName, { period, startDate, endDate })
   );
 
   server.tool("get_commercial_risk",
-    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
-    "REPORTE: Detecta tiendas en riesgo: caída de ventas y tiendas sin actividad. " +
+    "Detecta tiendas en riesgo: caída de ventas y tiendas sin actividad. " +
     "Para: alertas, riesgos, tiendas inactivas. " +
-    "Usa este tool en vez de query_mongodb para alertas comerciales.",
+    "storeName es OBLIGATORIO. Si el usuario no dijo qué comercio, PREGÚNTALE antes de llamar este tool.",
     { ...commonParams,
       dropThreshold: z.number().optional().describe("% mínimo de caída para alertar. Default: 60"),
       zeroDays: z.number().optional().describe("Días sin ventas para considerar inactiva. Default: 3"),

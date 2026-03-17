@@ -3,30 +3,27 @@ import { commonParams, callWiboWithStore } from "../api.js";
 
 export function register(server) {
   server.tool("get_transactions_daily",
-    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
-    "REPORTE: Transacciones diarias por tienda con métricas y promedios. " +
-    "Para: actividad diaria, ventas diarias. " +
-    "Usa este tool en vez de query_mongodb para datos diarios.",
+    "Transacciones diarias por tienda con métricas y promedios. " +
+    "Para: actividad diaria, ventas diarias, tendencias. " +
+    "storeName es OBLIGATORIO. Si el usuario no dijo qué comercio, PREGÚNTALE antes de llamar este tool.",
     { ...commonParams },
     async ({ storeName, period, startDate, endDate }) =>
       callWiboWithStore("/transactions/daily", storeName, { period, startDate, endDate })
   );
 
   server.tool("get_transactions_totals",
-    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
-    "REPORTE: Totales agregados: transacciones exitosas, ventas totales, usuarios. " +
+    "Totales agregados: transacciones exitosas, ventas totales, usuarios. " +
     "Para: resumen global, KPIs totales, cuántas órdenes hubo. " +
-    "Usa este tool en vez de query_mongodb para totales de ventas.",
+    "storeName es OBLIGATORIO. Si el usuario no dijo qué comercio, PREGÚNTALE antes de llamar este tool.",
     { ...commonParams },
     async ({ storeName, period, startDate, endDate }) =>
       callWiboWithStore("/transactions/totals", storeName, { period, startDate, endDate })
   );
 
   server.tool("get_low_transactions",
-    "REQUIERE ORGANIZACIÓN — Si el usuario no especificó organización o comercio, usa list_organizations PRIMERO. " +
-    "REPORTE: Tiendas con transacciones semanales bajo umbral mínimo. " +
+    "Tiendas con transacciones semanales bajo umbral mínimo. " +
     "Para: bajo rendimiento, alertas de actividad. " +
-    "Usa este tool en vez de query_mongodb para alertas de transacciones.",
+    "storeName es OBLIGATORIO. Si el usuario no dijo qué comercio, PREGÚNTALE antes de llamar este tool.",
     { ...commonParams,
       threshold: z.number().optional().describe("Umbral mínimo semanal. Default: 140"),
     },

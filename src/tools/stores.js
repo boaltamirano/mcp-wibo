@@ -9,24 +9,29 @@ export function register(server) {
   // ── search_stores ─────────────────────────────────────────
   server.tool(
     "search_stores",
-    "Busca comercios por nombre. Úsala SIEMPRE antes de consultar datos si no conoces el nombre exacto. " +
-    "Devuelve lista de comercios con su nombre, organización y estado. " +
-    "Para listar TODOS los comercios, usa query '*'.",
+    "Busca comercios por nombre. Útil para encontrar el nombre exacto de un comercio " +
+    "cuando ya sabes la organización. Ingresa parte del nombre (ej: 'Kiosko', 'Pollo Bravo'). " +
+    "Devuelve lista de comercios con su nombre, organización y estado.",
     {
-      query: z.string().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko', 'Pollo'. Usa '*' para listar todos."),
+      query: z.string().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko Chacay', 'Pollo Bravo'."),
       limit: z.number().optional().describe(`Máximo de resultados. Default: 100, máximo: ${MAX_SEARCH_LIMIT}`),
     },
     async ({ query, limit = 100 }) => {
+      const isAll = query === "*" || query === "" || query === "todos" || query === "all";
+      if (isAll) {
+        throw new Error(
+          "Para encontrar comercios, necesitas un nombre específico. " +
+          "Pregunta al usuario: '¿Qué comercio buscas?' o usa list_organizations para ver las organizaciones disponibles."
+        );
+      }
+
       const maxLimit = Math.min(limit, MAX_SEARCH_LIMIT);
       const cacheKey = `stores:${query.toLowerCase().trim()}:${maxLimit}`;
 
       const result = await cached(cacheKey, async () => {
         const database = await getDb();
-        const isAll = query === "*" || query === "" || query === "todos" || query === "all";
         const match = { is_deleted: { $ne: true } };
-        if (!isAll) {
-          match.name = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-        }
+        match.name = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
 
         const totalCount = await database.collection("stores").countDocuments(match, { maxTimeMS: QUERY_TIMEOUT_MS });
 

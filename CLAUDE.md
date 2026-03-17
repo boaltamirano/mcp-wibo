@@ -82,19 +82,20 @@ Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
 
 Muestra entradas activas y tamaño del cache.
 
-## Flujo obligatorio para reportes
+## Flujo para reportes
 
-1. Si el usuario no especifica organización o comercio → `list_organizations` y preguntar
-2. Si hay múltiples comercios en la organización → preguntar cuál
-3. Solo con comercio confirmado → ejecutar el tool de reporte
+Todo reporte necesita 1 organización + 1 comercio:
 
-## Tools disponibles (20)
+1. Si el usuario no dice de qué organización o comercio → usa `available_reports` (incluye lista de organizaciones) y pregunta cuál
+2. Con la organización elegida → usa `search_stores` y pregunta qué comercio
+3. Con comercio confirmado → ejecuta el tool de reporte
 
-### Guia de reportes (1)
-- `available_reports` — catalogo de reportes disponibles con flujo obligatorio y ejemplos de uso
+Si el usuario ya dice un comercio específico (ej: "ventas de Pollo Bravo"), ve directo al paso 3.
 
-### Organizaciones (1) — PASO PREVIO OBLIGATORIO
-- `list_organizations` — listar organizaciones con sus comercios activos **[cacheado 6h]**
+## Tools disponibles (19)
+
+### Guia de reportes + organizaciones (1)
+- `available_reports` — guia de reportes, lista de organizaciones activas **[cacheado 6h]**, flujo y ejemplos
 
 ### MongoDB (7)
 - `list_collections` — listar todas las colecciones con conteo estimado
