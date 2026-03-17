@@ -66,6 +66,7 @@ Consultas frecuentes se cachean por 6 horas para reducir carga en MongoDB.
 | Operacion | Cache key | TTL |
 |-----------|-----------|-----|
 | Resolución de store por nombre | `resolve:{nombre}` | 6h |
+| Resolución de org por nombre | `resolve:org:{nombre}` | 6h |
 | Búsqueda de stores | `stores:{query}:{limit}` | 6h |
 | Configuración de store | `config:{storeId}` | 6h |
 | Lista de organizaciones | `organizations:list` | 6h |
@@ -84,13 +85,14 @@ Muestra entradas activas y tamaño del cache.
 
 ## Flujo para reportes
 
-Todo reporte necesita 1 organización + 1 comercio:
+Los 10 tools de reporte API operan a nivel **organización** (orgName), NO por comercio individual.
 
-1. Si el usuario no dice de qué organización o comercio → usa `available_reports` (incluye lista de organizaciones) y pregunta cuál
-2. Con la organización elegida → usa `search_stores` y pregunta qué comercio
-3. Con comercio confirmado → ejecuta el tool de reporte
+1. Si el usuario no dice de qué organización → usa `available_reports` (incluye lista de organizaciones) y pregunta cuál
+2. Con la organización confirmada → ejecuta el tool de reporte con `orgName`
 
-Si el usuario ya dice un comercio específico (ej: "ventas de Pollo Bravo"), ve directo al paso 3.
+Si el usuario ya menciona una organización (ej: "ventas de Sodexo Energía"), ve directo al paso 2.
+
+**Nota:** `get_store_config`, `get_payment_errors` y `get_payment_summary` siguen usando `storeName` (operan a nivel comercio).
 
 ## Tools disponibles (19)
 
