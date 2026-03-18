@@ -4,7 +4,7 @@ import { cached } from "../cache.js";
 import { ok } from "../api.js";
 import {
   QUERY_TIMEOUT_MS, MAX_FIND_LIMIT, DEFAULT_FIND_LIMIT,
-  MAX_AGGREGATE_LIMIT, FORBIDDEN_STAGES,
+  MAX_AGGREGATE_LIMIT, FORBIDDEN_STAGES, BLOCKED_COLLECTIONS,
 } from "../config.js";
 
 export function register(server) {
@@ -16,7 +16,7 @@ export function register(server) {
     async () => {
       const database = await getDb();
       const collections = await database.listCollections({}, { nameOnly: true }).toArray();
-      const names = collections.map((c) => c.name).sort();
+      const names = collections.map((c) => c.name).filter((n) => !BLOCKED_COLLECTIONS.includes(n)).sort();
 
       const counts = await Promise.all(
         names.map(async (name) => {
@@ -33,12 +33,11 @@ export function register(server) {
   server.tool(
     "query_mongodb",
     "Consultas de solo lectura en MongoDB (find, count, distinct, aggregate). " +
-    "Para datos de ventas, transacciones o pagos usa los tools de reporte (get_commercial_*, get_transactions_*, etc.) en su lugar. " +
-    "Las colecciones orders, payments, stores y organizations necesitan filtro por store_id, organization_id o _id. " +
-    "Si no tienes estos IDs, pregunta al usuario de qué organización o comercio necesita la información.",
+    "BLOQUEADA: la colección 'orders' NO se puede consultar — usa los tools de reporte (get_transactions_*, get_commercial_*, etc.). " +
+    "Las colecciones payments, stores y organizations necesitan filtro por store_id, organization_id o _id.",
     {
       collection: z.string().describe(
-        "Nombre de la colección: stores, orders, organizations, users, products, payments, sites, wallets, coupons, etc."
+        "Nombre de la colección: stores, organizations, users, products, payments, sites, wallets, coupons, etc. (orders NO disponible)"
       ),
       operation: z.enum(["find", "count", "distinct", "aggregate"]).describe(
         "find = buscar documentos, count = contar, distinct = valores únicos, aggregate = pipeline de agregación"
@@ -63,13 +62,21 @@ export function register(server) {
       ),
     },
     async ({ collection, operation, filter, projection, sort, limit, distinctField, pipeline }) => {
+      // Bloquear colecciones prohibidas
+      if (BLOCKED_COLLECTIONS.includes(collection)) {
+        throw new Error(
+          `La colección "${collection}" no está disponible en query_mongodb. ` +
+          `Para datos de ventas y transacciones usa los tools de reporte: get_transactions_totals, get_transactions_daily, etc.`
+        );
+      }
+
       const database = await getDb();
       const col = database.collection(collection);
       const parsedFilter = filter ? JSON.parse(filter) : {};
       const isEmptyFilter = Object.keys(parsedFilter).length === 0;
 
       // Bloquear colecciones sensibles sin filtro de store_id/organization_id
-      const RESTRICTED_COLLECTIONS = ["orders", "payments", "stores", "organizations"];
+      const RESTRICTED_COLLECTIONS = ["payments", "stores", "organizations"];
       if (RESTRICTED_COLLECTIONS.includes(collection)) {
         const hasStoreId = "store_id" in parsedFilter;
         const hasOrgId = "organization_id" in parsedFilter;
@@ -158,6 +165,9 @@ export function register(server) {
       sampleFilter: z.string().optional().describe('Filtro opcional para elegir un documento representativo. JSON. Default: {}'),
     },
     async ({ collection, sampleFilter }) => {
+      if (BLOCKED_COLLECTIONS.includes(collection)) {
+        throw new Error(`La colección "${collection}" no está disponible para inspección.`);
+      }
       const database = await getDb();
       const filter = sampleFilter ? JSON.parse(sampleFilter) : {};
       const doc = await database.collection(collection).findOne(filter, { maxTimeMS: QUERY_TIMEOUT_MS });

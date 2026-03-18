@@ -19,5 +19,8 @@ export const FORBIDDEN_STAGES = [
   "$setWindowFields",                        // puede consumir mucha memoria
 ];
 
+// ─── Colecciones bloqueadas para query_mongodb ───────────────
+export const BLOCKED_COLLECTIONS = ["orders"];
+
 // ─── Cache ───────────────────────────────────────────────────
 export const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas en ms
