@@ -173,3 +173,4 @@ echo ""
 echo "  Desinstalar:"
 echo "    curl -fsSL https://raw.githubusercontent.com/$REPO/$BRANCH/scripts/uninstall.sh | bash"
 echo ""
+
