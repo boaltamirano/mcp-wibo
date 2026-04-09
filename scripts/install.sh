@@ -42,7 +42,7 @@ NC='\033[0m'
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║       Wibo MCP — Instalador v8.0         ║"
+echo "║       Wibo MCP — Instalador v9.0         ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
