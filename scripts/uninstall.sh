@@ -18,7 +18,7 @@ case "$OS" in
 esac
 
 echo ""
-echo "Desinstalando Wibo MCP v9.0..."
+echo "Desinstalando Wibo MCP v10.0..."
 echo ""
 
 # Eliminar carpeta

@@ -19,7 +19,7 @@ $CLAUDE_CONFIG = "$CLAUDE_CONFIG_DIR\claude_desktop_config.json"
 
 Write-Host ""
 Write-Host "+==============================================+" -ForegroundColor Cyan
-Write-Host "|       Wibo MCP - Instalador v9.0 (Windows)   |" -ForegroundColor Cyan
+Write-Host "|       Wibo MCP - Instalador v10.0 (Windows)  |" -ForegroundColor Cyan
 Write-Host "+==============================================+" -ForegroundColor Cyan
 Write-Host ""
 

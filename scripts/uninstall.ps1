@@ -7,7 +7,7 @@ $INSTALL_DIR = "$env:USERPROFILE\.wibo-mcp"
 $CLAUDE_CONFIG = "$env:APPDATA\Claude\claude_desktop_config.json"
 
 Write-Host ""
-Write-Host "Desinstalando Wibo MCP v9.0..." -ForegroundColor Yellow
+Write-Host "Desinstalando Wibo MCP v10.0..." -ForegroundColor Yellow
 Write-Host ""
 
 # Eliminar carpeta
