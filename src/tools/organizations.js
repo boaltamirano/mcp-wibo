@@ -12,7 +12,7 @@ export function register(server) {
       const database = await getDb();
 
       const orgs = await database.collection("organizations").aggregate([
-        { $match: { is_deleted: { $ne: true } } },
+        { $match: { is_deleted: { $ne: true }, is_enabled: true } },
         {
           $lookup: {
             from: "stores",

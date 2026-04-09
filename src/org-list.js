@@ -4,7 +4,7 @@ import { QUERY_TIMEOUT_MS } from "./config.js";
 export async function getOrganizationList() {
   const database = await getDb();
   const orgs = await database.collection("organizations").aggregate([
-    { $match: { is_deleted: { $ne: true } } },
+    { $match: { is_deleted: { $ne: true }, is_enabled: true } },
     {
       $lookup: {
         from: "stores",
