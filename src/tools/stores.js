@@ -19,10 +19,11 @@ export function register(server) {
     async ({ query = "", limit = 100 }) => {
       const maxLimit = Math.min(limit, MAX_SEARCH_LIMIT);
       const database = await getDb();
-      const match = { is_deleted: { $ne: true } };
+      const match = { is_deleted: { $ne: true }, is_enabled: true };
       const trimmed = query.trim();
       if (trimmed && trimmed !== "*" && trimmed !== "todos" && trimmed !== "all") {
-        match.name = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const regex = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        match.$or = [{ name: regex }, { "brand.title": regex }];
       }
 
       const totalCount = await database.collection("stores").countDocuments(match, { maxTimeMS: QUERY_TIMEOUT_MS });
@@ -42,6 +43,7 @@ export function register(server) {
           $project: {
             storeId: "$_id",
             storeName: "$name",
+            brandTitle: { $ifNull: ["$brand.title", null] },
             organizationId: "$organization_id",
             orgName: { $ifNull: ["$org.name", "Sin organización"] },
             isEnabled: "$is_enabled",

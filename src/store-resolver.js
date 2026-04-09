@@ -7,8 +7,8 @@ export async function resolveStore(storeName) {
 
   const stores = await database
     .collection("stores")
-    .find({ name: regex, is_deleted: { $ne: true } })
-    .project({ _id: 1, name: 1, organization_id: 1, is_enabled: 1 })
+    .find({ $or: [{ name: regex }, { "brand.title": regex }], is_deleted: { $ne: true }, is_enabled: true })
+    .project({ _id: 1, name: 1, "brand.title": 1, organization_id: 1, is_enabled: 1 })
     .maxTimeMS(QUERY_TIMEOUT_MS)
     .limit(20)
     .toArray();
@@ -42,7 +42,7 @@ export async function resolveOrgOrThrow(orgName) {
 
   const orgs = await database
     .collection("organizations")
-    .find({ name: regex, is_deleted: { $ne: true } })
+    .find({ name: regex, is_deleted: { $ne: true }, is_enabled: true })
     .project({ _id: 1, name: 1 })
     .maxTimeMS(QUERY_TIMEOUT_MS)
     .limit(10)
