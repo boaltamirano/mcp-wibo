@@ -1,21 +1,21 @@
-import { orgParams, callWiboWithOrg } from "../api.js";
+import { orgParams, callWiboReport } from "../api.js";
 
 export function register(server) {
   server.tool("get_payments_rejected",
-    "Transacciones rechazadas de una organización: desglose por motivo y método de pago. " +
+    "Transacciones rechazadas: desglose por motivo y método de pago. " +
     "Para: pagos fallidos, análisis de rechazos. " +
-    "orgName es OBLIGATORIO. Si el usuario no dijo qué organización, usa list_organizations y PREGÚNTALE.",
+    "Opcional: orgName para filtrar por organización, storeName para un comercio específico, o sin filtro para datos globales.",
     { ...orgParams },
-    async ({ orgName, period, startDate, endDate }) =>
-      callWiboWithOrg("/payments/rejected", orgName, { period, startDate, endDate })
+    async ({ orgName, storeName, period, startDate, endDate }) =>
+      callWiboReport("/payments/rejected", { orgName, storeName }, { period, startDate, endDate })
   );
 
   server.tool("get_payments_methods",
-    "Estadísticas por método de pago de una organización: aprobación, rechazo, errores técnicos. " +
+    "Estadísticas por método de pago: aprobación, rechazo, errores técnicos. " +
     "Para: análisis de medios de pago, tasas de éxito. " +
-    "orgName es OBLIGATORIO. Si el usuario no dijo qué organización, usa list_organizations y PREGÚNTALE.",
+    "Opcional: orgName para filtrar por organización, storeName para un comercio específico, o sin filtro para datos globales.",
     { ...orgParams },
-    async ({ orgName, period, startDate, endDate }) =>
-      callWiboWithOrg("/payments/methods", orgName, { period, startDate, endDate })
+    async ({ orgName, storeName, period, startDate, endDate }) =>
+      callWiboReport("/payments/methods", { orgName, storeName }, { period, startDate, endDate })
   );
 }

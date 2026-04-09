@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { getDb } from "../db.js";
-import { cached } from "../cache.js";
 import { resolveStore } from "../store-resolver.js";
 import { storeNameParam, ok } from "../api.js";
 import { QUERY_TIMEOUT_MS, MAX_SEARCH_LIMIT } from "../config.js";
@@ -9,67 +8,57 @@ export function register(server) {
   // ── search_stores ─────────────────────────────────────────
   server.tool(
     "search_stores",
-    "Busca comercios por nombre. Útil para encontrar el nombre exacto de un comercio " +
-    "cuando ya sabes la organización. Ingresa parte del nombre (ej: 'Kiosko', 'Pollo Bravo'). " +
+    "Busca comercios por nombre o lista todos los comercios activos. " +
+    "Si el usuario pide 'todos los comercios activos' o similar, llama este tool sin query (o query vacío). " +
+    "Si busca un comercio específico, pasa parte del nombre (ej: 'Kiosko', 'Pollo Bravo'). " +
     "Devuelve lista de comercios con su nombre, organización y estado.",
     {
-      query: z.string().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko Chacay', 'Pollo Bravo'."),
+      query: z.string().optional().describe("Texto a buscar en el nombre del comercio. Ej: 'Kiosko Chacay', 'Pollo Bravo'. Omitir o dejar vacío para listar todos los comercios activos."),
       limit: z.number().optional().describe(`Máximo de resultados. Default: 100, máximo: ${MAX_SEARCH_LIMIT}`),
     },
-    async ({ query, limit = 100 }) => {
-      const isAll = query === "*" || query === "" || query === "todos" || query === "all";
-      if (isAll) {
-        throw new Error(
-          "Para encontrar comercios, necesitas un nombre específico. " +
-          "Pregunta al usuario: '¿Qué comercio buscas?' o usa list_organizations para ver las organizaciones disponibles."
-        );
+    async ({ query = "", limit = 100 }) => {
+      const maxLimit = Math.min(limit, MAX_SEARCH_LIMIT);
+      const database = await getDb();
+      const match = { is_deleted: { $ne: true } };
+      const trimmed = query.trim();
+      if (trimmed && trimmed !== "*" && trimmed !== "todos" && trimmed !== "all") {
+        match.name = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       }
 
-      const maxLimit = Math.min(limit, MAX_SEARCH_LIMIT);
-      const cacheKey = `stores:${query.toLowerCase().trim()}:${maxLimit}`;
+      const totalCount = await database.collection("stores").countDocuments(match, { maxTimeMS: QUERY_TIMEOUT_MS });
 
-      const result = await cached(cacheKey, async () => {
-        const database = await getDb();
-        const match = { is_deleted: { $ne: true } };
-        match.name = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-
-        const totalCount = await database.collection("stores").countDocuments(match, { maxTimeMS: QUERY_TIMEOUT_MS });
-
-        const stores = await database.collection("stores").aggregate([
-          { $match: match },
-          {
-            $lookup: {
-              from: "organizations",
-              localField: "organization_id",
-              foreignField: "_id",
-              as: "org",
-            },
+      const stores = await database.collection("stores").aggregate([
+        { $match: match },
+        {
+          $lookup: {
+            from: "organizations",
+            localField: "organization_id",
+            foreignField: "_id",
+            as: "org",
           },
-          { $unwind: { path: "$org", preserveNullAndEmptyArrays: true } },
-          {
-            $project: {
-              storeId: "$_id",
-              storeName: "$name",
-              organizationId: "$organization_id",
-              orgName: { $ifNull: ["$org.name", "Sin organización"] },
-              isEnabled: "$is_enabled",
-            },
+        },
+        { $unwind: { path: "$org", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            storeId: "$_id",
+            storeName: "$name",
+            organizationId: "$organization_id",
+            orgName: { $ifNull: ["$org.name", "Sin organización"] },
+            isEnabled: "$is_enabled",
           },
-          { $limit: maxLimit },
-        ], { maxTimeMS: QUERY_TIMEOUT_MS }).toArray();
+        },
+        { $limit: maxLimit },
+      ], { maxTimeMS: QUERY_TIMEOUT_MS }).toArray();
 
-        if (stores.length === 0) {
-          return { message: `No se encontraron comercios con "${query}".`, total: 0, results: [] };
-        }
-        return {
-          message: `Se encontraron ${totalCount} comercio(s)${totalCount > maxLimit ? ` (mostrando ${maxLimit})` : ""}.`,
-          total: totalCount,
-          showing: stores.length,
-          results: stores,
-        };
+      if (stores.length === 0) {
+        return ok({ message: `No se encontraron comercios con "${query}".`, total: 0, results: [] });
+      }
+      return ok({
+        message: `Se encontraron ${totalCount} comercio(s)${totalCount > maxLimit ? ` (mostrando ${maxLimit})` : ""}.`,
+        total: totalCount,
+        showing: stores.length,
+        results: stores,
       });
-
-      return ok(result);
     }
   );
 
@@ -85,63 +74,59 @@ export function register(server) {
       const result = await resolveStore(storeName);
       if (!result.found) return ok(result);
 
-      const configResult = await cached(`config:${result.store._id}`, async () => {
-        const database = await getDb();
-        const store = await database.collection("stores").findOne(
-          { _id: result.store._id },
-          { projection: { name: 1, settings: 1, information: 1 }, maxTimeMS: QUERY_TIMEOUT_MS }
-        );
+      const database = await getDb();
+      const store = await database.collection("stores").findOne(
+        { _id: result.store._id },
+        { projection: { name: 1, settings: 1, information: 1 }, maxTimeMS: QUERY_TIMEOUT_MS }
+      );
 
-        if (!store || !store.settings) {
-          return { message: "Comercio encontrado pero sin configuración de settings." };
-        }
+      if (!store || !store.settings) {
+        return ok({ message: "Comercio encontrado pero sin configuración de settings." });
+      }
 
-        const s = store.settings;
+      const s = store.settings;
 
-        const enabledPayments = [];
-        const webpaySettings = s.payment_methods?.webpay?.settings || {};
-        for (const [method, config] of Object.entries(webpaySettings)) {
-          if (config.is_enabled) enabledPayments.push(method);
+      const enabledPayments = [];
+      const webpaySettings = s.payment_methods?.webpay?.settings || {};
+      for (const [method, config] of Object.entries(webpaySettings)) {
+        if (config.is_enabled) enabledPayments.push(method);
+      }
+      if (s.payment_methods?.wallet?.is_enabled) enabledPayments.push("wallet");
+      if (s.payment_methods?.cards?.is_enabled) {
+        for (const [method, config] of Object.entries(s.payment_methods.cards.settings || {})) {
+          if (config.is_enabled) enabledPayments.push(`cards:${method}`);
         }
-        if (s.payment_methods?.wallet?.is_enabled) enabledPayments.push("wallet");
-        if (s.payment_methods?.cards?.is_enabled) {
-          for (const [method, config] of Object.entries(s.payment_methods.cards.settings || {})) {
-            if (config.is_enabled) enabledPayments.push(`cards:${method}`);
-          }
+      }
+      if (s.payment_methods?.benefits?.is_enabled) {
+        for (const [method, config] of Object.entries(s.payment_methods.benefits.settings || {})) {
+          if (config.is_enabled) enabledPayments.push(`benefits:${method}`);
         }
-        if (s.payment_methods?.benefits?.is_enabled) {
-          for (const [method, config] of Object.entries(s.payment_methods.benefits.settings || {})) {
-            if (config.is_enabled) enabledPayments.push(`benefits:${method}`);
-          }
-        }
+      }
 
-        const activePOS = [];
-        for (const [pos, enabled] of Object.entries(s.pos_settings || {})) {
-          if (pos !== "additional_settings" && enabled) activePOS.push(pos);
-        }
+      const activePOS = [];
+      for (const [pos, enabled] of Object.entries(s.pos_settings || {})) {
+        if (pos !== "additional_settings" && enabled) activePOS.push(pos);
+      }
 
-        const enabledDelivery = [];
-        for (const [method, config] of Object.entries(s.delivery_methods || {})) {
-          if (config.is_enabled) enabledDelivery.push(method);
-        }
+      const enabledDelivery = [];
+      for (const [method, config] of Object.entries(s.delivery_methods || {})) {
+        if (config.is_enabled) enabledDelivery.push(method);
+      }
 
-        return {
-          storeName: store.name,
-          paymentMethods: enabledPayments.length > 0 ? enabledPayments : ["Ninguno habilitado"],
-          posIntegrations: activePOS.length > 0 ? activePOS : ["Ninguno activo"],
-          deliveryMethods: enabledDelivery.length > 0 ? enabledDelivery : ["Ninguno habilitado"],
-          features: {
-            tips: s.tips || false,
-            coupons: s.coupons || false,
-            autoaccept: s.autoaccept || false,
-            isCatalog: s.is_catalog || false,
-            showStock: s.show_stock || false,
-            closed: s.closed || false,
-          },
-        };
+      return ok({
+        storeName: store.name,
+        paymentMethods: enabledPayments.length > 0 ? enabledPayments : ["Ninguno habilitado"],
+        posIntegrations: activePOS.length > 0 ? activePOS : ["Ninguno activo"],
+        deliveryMethods: enabledDelivery.length > 0 ? enabledDelivery : ["Ninguno habilitado"],
+        features: {
+          tips: s.tips || false,
+          coupons: s.coupons || false,
+          autoaccept: s.autoaccept || false,
+          isCatalog: s.is_catalog || false,
+          showStock: s.show_stock || false,
+          closed: s.closed || false,
+        },
       });
-
-      return ok(configResult);
     }
   );
 }

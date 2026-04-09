@@ -6,12 +6,11 @@ import { register as registerApiCommercial } from "./tools/api-commercial.js";
 import { register as registerApiTransactions } from "./tools/api-transactions.js";
 import { register as registerApiPayments } from "./tools/api-payments.js";
 import { register as registerApiFeatures } from "./tools/api-features.js";
-import { register as registerCacheStats } from "./tools/cache-stats.js";
 import { register as registerReportGuide } from "./tools/report-guide.js";
 import { register as registerOrganizations } from "./tools/organizations.js";
 import { register as registerUsageGuide } from "./tools/usage-guide.js";
 
-const server = new McpServer({ name: "wibo-reports", version: "8.0.0" });
+const server = new McpServer({ name: "wibo-reports", version: "9.0.0" });
 
 registerUsageGuide(server);
 registerReportGuide(server);
@@ -23,6 +22,5 @@ registerApiCommercial(server);
 registerApiTransactions(server);
 registerApiPayments(server);
 registerApiFeatures(server);
-registerCacheStats(server);
 
 export { server };

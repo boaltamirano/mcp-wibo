@@ -4,16 +4,14 @@ import { resolveOrThrow, resolveOrgOrThrow } from "./store-resolver.js";
 
 export const ok = (data) => ({ content: [{ type: "text", text: JSON.stringify(data, null, 2) }] });
 
-// ─── Params nivel COMERCIO (para tools que operan sobre 1 tienda específica) ──
+// ─── Params nivel COMERCIO ────────────────────────────────────────────────────
 export const storeNameParam = z.string().min(1).describe(
-  "Nombre del comercio (OBLIGATORIO). Ej: 'Kiosko Chacay Centro', 'Pollo Bravo'. " +
-  "Si el usuario no dijo qué comercio, PREGÚNTALE antes de ejecutar este tool."
+  "Nombre del comercio. Ej: 'Kiosko Chacay Centro', 'Pollo Bravo'."
 );
 
-// ─── Params nivel ORGANIZACIÓN (para todos los tools de reporte) ──────────────
+// ─── Params nivel ORGANIZACIÓN ────────────────────────────────────────────────
 export const orgNameParam = z.string().min(1).describe(
-  "Nombre de la organización (OBLIGATORIO). Ej: 'Sodexo Energía', 'Aeropuerto Pudahuel'. " +
-  "Si el usuario no dijo qué organización, usa list_organizations y PREGÚNTALE antes de ejecutar."
+  "Nombre de la organización. Ej: 'Sodexo Energía', 'Aeropuerto Pudahuel'."
 );
 
 const MAX_RANGE_DAYS = 183; // ~6 meses
@@ -28,8 +26,14 @@ export const commonParams = {
     .describe("Fecha fin YYYY-MM-DD. Tiene prioridad sobre period. Rango máximo: 6 meses"),
 };
 
+// ─── Params de reportes: todos opcionales ─────────────────────────────────────
 export const orgParams = {
-  orgName: orgNameParam,
+  orgName: z.string().optional().describe(
+    "Nombre de la organización. Ej: 'Sodexo Energía'. Omitir para consultar sin filtrar por org."
+  ),
+  storeName: z.string().optional().describe(
+    "Nombre de un comercio específico. Ej: 'Kiosko Chacay Centro'. Omitir para consultar sin filtrar por comercio."
+  ),
   period: z.enum(["day", "week", "month", "6months"]).optional()
     .describe("Período predefinido: day, week, month, 6months. Default: month"),
   startDate: z.string().optional()
@@ -89,5 +93,26 @@ export async function callWiboWithOrg(path, orgName, extraParams = {}) {
   validateDateRange(extraParams.startDate, extraParams.endDate);
   const { organizationId } = await resolveOrgOrThrow(orgName);
   const data = await wiboFetch(path, { organizationId, ...extraParams });
+  return ok(data);
+}
+
+// ─── Llamada de reporte: orgName, storeName o ninguno (todos los datos) ───────
+export async function callWiboReport(path, { orgName, storeName }, extraParams = {}) {
+  validateDateRange(extraParams.startDate, extraParams.endDate);
+
+  if (storeName) {
+    const { organizationId, storeId } = await resolveOrThrow(storeName);
+    const data = await wiboFetch(path, { organizationId, storeId, ...extraParams });
+    return ok(data);
+  }
+
+  if (orgName) {
+    const { organizationId } = await resolveOrgOrThrow(orgName);
+    const data = await wiboFetch(path, { organizationId, ...extraParams });
+    return ok(data);
+  }
+
+  // Sin filtro: la API devuelve datos globales
+  const data = await wiboFetch(path, { ...extraParams });
   return ok(data);
 }

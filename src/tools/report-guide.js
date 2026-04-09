@@ -14,18 +14,13 @@ export function register(server) {
           type: "text",
           text: JSON.stringify({
             organizacionesDisponibles: orgList,
-            instruccion: "Muestra la lista de organizaciones al usuario y pregunta: '¿De cuál organización quieres el reporte?' Espera su respuesta antes de continuar.",
             flujo: {
-              resumen: "Todo reporte se genera por organización. Nunca iteres sobre múltiples organizaciones.",
-              pasos: [
-                "1. Muestra las organizaciones de arriba y pregunta cuál quiere el usuario. Espera respuesta.",
-                "2. Con la organización confirmada, ejecuta el tool de reporte usando orgName.",
-              ],
+              resumen: "Los reportes aceptan orgName, storeName, o ninguno (datos globales). Ejecuta directamente sin pedir confirmación.",
               reglas: [
-                "Si el usuario ya mencionó una organización (ej: 'Sodexo Energía'), ve directo al paso 2.",
-                "Si pide 'todos' o 'todas las organizaciones', responde: 'Los reportes se generan por organización. ¿Cuál quieres consultar?'",
-                "Un reporte = una organización. Nunca hagas loops sobre la lista.",
-                "get_store_config, get_payment_errors y get_payment_summary operan a nivel de COMERCIO específico — esos sí piden storeName.",
+                "Si el usuario menciona una organización, usa orgName.",
+                "Si menciona un comercio específico, usa storeName.",
+                "Si pide datos de todos o no especifica, ejecuta el tool sin filtros — la API devuelve datos globales.",
+                "get_store_config, get_payment_errors y get_payment_summary requieren storeName (operan sobre una tienda).",
               ],
             },
             reportes: [

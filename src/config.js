@@ -19,5 +19,3 @@ export const FORBIDDEN_STAGES = [
   "$setWindowFields",                        // puede consumir mucha memoria
 ];
 
-// ─── Cache ───────────────────────────────────────────────────
-export const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas en ms
